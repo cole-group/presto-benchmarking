@@ -10,9 +10,15 @@ TNET_500_FRAC_TEST = config["tnet500_frac_test"]
 
 ############ Convenience Functions #############
 
-def smiles_dir_outputs(wildcards: Any, checkpoint_obj: Any, smiles_dir: str, output_pattern: str) -> list[str]:
+def smiles_dir_outputs(
+    wildcards: Any,
+    checkpoint_obj: Any,
+    smiles_dir: str,
+    output_pattern: str,
+    checkpoint_kwargs: dict | None = None,
+) -> list[str]:
     """Expand output_pattern over all .smi files in smiles_dir once checkpoint_obj is done."""
-    checkpoint_obj.get()
+    checkpoint_obj.get(**(checkpoint_kwargs or {}))
     molecules = glob_wildcards(f"{smiles_dir}/{{molecule}}.smi").molecule
     return expand(output_pattern, molecule=molecules)
 
@@ -22,16 +28,22 @@ def validation_force_fields(wildcards: Any) -> list[str]:
 
     Infers the smiles directory from the dataset wildcard and resolves
     the per-molecule force field paths after the relevant checkpoint completes.
+    Tries a dataset-specific checkpoint (split_{dataset}_input) first; falls back
+    to split_test_only_input for datasets without a dedicated checkpoint.
     """
     dataset = wildcards.dataset
     checkpoint_obj = getattr(checkpoints, f"split_{dataset}_input", None)
+    checkpoint_kwargs: dict = {}
     if checkpoint_obj is None:
-        raise ValueError(f"No checkpoint available for dataset '{dataset}'")
+        # Fall back to the generic protein backbone checkpoint (wildcard on dataset)
+        checkpoint_obj = checkpoints.split_test_only_input
+        checkpoint_kwargs = {"dataset": dataset}
     return smiles_dir_outputs(
         wildcards,
         checkpoint_obj=checkpoint_obj,
         smiles_dir=f"benchmarking/{dataset}/input/{wildcards.dataset_type}/smiles",
         output_pattern=f"benchmarking/{dataset}/output/{wildcards.dataset_type}/{wildcards.config_name}/{{molecule}}/bespoke_force_field.offxml",
+        checkpoint_kwargs=checkpoint_kwargs,
     )
 
 
@@ -76,6 +88,18 @@ rule run_presto:
         slurm_extra="--gpus-per-task=1",
     shell:
         "pixi run -e default presto-benchmark run-presto {input.config_file} {input.smiles_file} $(dirname {output[0]})"
+
+checkpoint split_test_only_input:
+    """Generic split for datasets where everything goes into the test set (frac-test 1.0)."""
+    input:
+        "benchmarking/{dataset}/input/{dataset}.json"
+    output:
+        test_set_dir=directory("benchmarking/{dataset}/input/test"),
+        test_set_json="benchmarking/{dataset}/input/test/test.json",
+        test_set_smiles=directory("benchmarking/{dataset}/input/test/smiles"),
+    shell:
+        "pixi run -e default presto-benchmark split-qca-input {input[0]} {output.test_set_dir} "
+        "--frac-test 1.0 --seed {RANDOM_SEED}"
 
 rule create_combined_force_field:
     input:
@@ -176,16 +200,7 @@ rule get_jacs_fragments_input:
         "pixi run -e default presto-benchmark get-qca-torsion-input "
         "'OpenFF-benchmark-ligand-fragments-v2.0' {output[0]}"
 
-checkpoint split_jacs_fragments_input:
-    input:
-        "benchmarking/jacs_fragments/input/jacs_fragments.json"
-    output:
-        test_set_dir=directory("benchmarking/jacs_fragments/input/test"),
-        test_set_json="benchmarking/jacs_fragments/input/test/test.json",
-        test_set_smiles=directory("benchmarking/jacs_fragments/input/test/smiles"),
-    shell:
-        "pixi run -e default presto-benchmark split-qca-input {input[0]} {output.test_set_dir} "
-        "--frac-test 1.0 --seed {RANDOM_SEED}"
+
 
 
 
@@ -198,26 +213,19 @@ rule get_1mer_backbone_input:
         "pixi run -e default presto-benchmark get-qca-torsion-input "
         "'OpenFF Protein Dipeptide 2-D TorsionDrive v2.0' {output[0]}"
 
+rule get_3mer_backbone_input:
+    output:
+        "benchmarking/3mer_backbone/input/3mer_backbone.json"
+    shell:
+        "pixi run -e default presto-benchmark get-qca-torsion-input "
+        "'OpenFF Protein Capped 3-mer Backbones v1.0' {output[0]}"
+
 rule get_1mer_sidechain_input:
     output:
         "benchmarking/1mer_side_chain/input/1mer_side_chain.json"
     shell:
         "pixi run -e default presto-benchmark get-qca-torsion-input "
         "'OpenFF Protein Dipeptide Sidechain TorsionDrive v1.0' {output[0]}"
-
-
-checkpoint split_1mer_backbone_input:
-    """Effectively a dummy rule as we just process everything into the test set."""
-    input:
-        "benchmarking/1mer_backbone/input/1mer_backbone.json"
-    output:
-        test_set_dir=directory("benchmarking/1mer_backbone/input/test"),
-        test_set_json="benchmarking/1mer_backbone/input/test/test.json",
-        test_set_smiles=directory("benchmarking/1mer_backbone/input/test/smiles"),
-    shell:
-        "pixi run -e default presto-benchmark split-qca-input {input[0]} {output.test_set_dir} "
-        "--frac-test 1.0 --seed {RANDOM_SEED}"
-
 
 rule get_qca_input_for_protein_torsions:
     output:

@@ -254,7 +254,9 @@ def analyse_torsion_scans_cli(
 
 @app.command("plot-ablation-comparison")
 def plot_ablation_comparison_cli(
-    metrics_json: Path = typer.Argument(..., help="Path to metrics.json from torsion scan analysis"),
+    metrics_json: Path = typer.Argument(
+        ..., help="Path to metrics.json from torsion scan analysis"
+    ),
     output_dir: Path = typer.Argument(..., help="Output directory for plots"),
 ) -> None:
     """Generate ablation comparison heatmap and distribution plots."""

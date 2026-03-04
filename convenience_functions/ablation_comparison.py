@@ -37,6 +37,7 @@ _REFERENCE_LABEL = "default"
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
+
 def _ff_key_from_raw_name(raw_name: str) -> str:
     if "/validation/" in raw_name and raw_name.endswith("/combined_force_field.offxml"):
         return Path(raw_name).parent.name
@@ -50,7 +51,7 @@ def _extract_metric(record: dict, metric_name: str) -> float:
 
 def _aggregate(values: np.ndarray, metric_label: str) -> float:
     if metric_label in {"RMSD", "RMSE"}:
-        return float(np.sqrt(np.mean(values ** 2)))
+        return float(np.sqrt(np.mean(values**2)))
     return float(np.mean(values))  # Mean JSD (500 K)
 
 
@@ -91,6 +92,7 @@ def _disp(ff_key: str) -> str:
 
 # ── Data loading ───────────────────────────────────────────────────────────────
 
+
 def _load_per_ff(metrics_json: Path) -> dict[str, pd.DataFrame]:
     with open(metrics_json) as fh:
         payload = json.load(fh)
@@ -98,15 +100,17 @@ def _load_per_ff(metrics_json: Path) -> dict[str, pd.DataFrame]:
     per_ff: dict[str, pd.DataFrame] = {}
     for raw_name, torsion_dict in payload["metrics"].items():
         ff_key = _ff_key_from_raw_name(raw_name)
-        per_ff[ff_key] = pd.DataFrame([
-            {
-                "torsion_id": str(tid),
-                "rmsd": _extract_metric(v, "rmsd"),
-                "rmse": _extract_metric(v, "rmse"),
-                "js_distance": _extract_metric(v, "js_distance"),
-            }
-            for tid, v in torsion_dict.items()
-        ])
+        per_ff[ff_key] = pd.DataFrame(
+            [
+                {
+                    "torsion_id": str(tid),
+                    "rmsd": _extract_metric(v, "rmsd"),
+                    "rmse": _extract_metric(v, "rmse"),
+                    "js_distance": _extract_metric(v, "js_distance"),
+                }
+                for tid, v in torsion_dict.items()
+            ]
+        )
     return per_ff
 
 
@@ -122,11 +126,12 @@ def _build_pct_and_stars(
         for metric in HEATMAP_METRICS:
             col = _METRIC_COLUMN[metric]
             ref_v = mdf[f"{col}_ref"].to_numpy(float)
-            ff_v  = mdf[f"{col}_ff"].to_numpy(float)
+            ff_v = mdf[f"{col}_ff"].to_numpy(float)
             ref_agg = _aggregate(ref_v, metric)
-            ff_agg  = _aggregate(ff_v, metric)
+            ff_agg = _aggregate(ff_v, metric)
             pct.loc[metric, ff] = (
-                np.nan if np.isclose(ref_agg, 0.0)
+                np.nan
+                if np.isclose(ref_agg, 0.0)
                 else 100.0 * (ff_agg - ref_agg) / ref_agg
             )
 
@@ -153,6 +158,7 @@ def _build_pct_and_stars(
 
 # ── Public API ─────────────────────────────────────────────────────────────────
 
+
 def plot_ablation_heatmap(metrics_json: Path, output_dir: Path) -> Path:
     """Save an annotated % change heatmap to ``output_dir/heatmap.png``."""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -168,7 +174,7 @@ def plot_ablation_heatmap(metrics_json: Path, output_dir: Path) -> Path:
     ablation_keys = sorted(
         ff for ff in per_ff if ff != _REFERENCE_LABEL and ff not in COLORBAR_EXCL
     )
-    excl_keys   = sorted(ff for ff in COLORBAR_EXCL if ff in per_ff)
+    excl_keys = sorted(ff for ff in COLORBAR_EXCL if ff in per_ff)
     all_ff_keys = ablation_keys + excl_keys
 
     merged_dfs = {
@@ -179,11 +185,11 @@ def plot_ablation_heatmap(metrics_json: Path, output_dir: Path) -> Path:
     pct, annot, _ = _build_pct_and_stars(per_ff, all_ff_keys, ablation_keys, merged_dfs)
 
     disp_map = {ff: _disp(ff) for ff in all_ff_keys}
-    plot_data  = pct.astype(float).rename(columns=disp_map)
+    plot_data = pct.astype(float).rename(columns=disp_map)
     plot_annot = annot.rename(columns=disp_map)
 
     abl_data = pct[ablation_keys].astype(float)
-    abs_max  = float(np.nanmax(np.abs(abl_data.values)))
+    abs_max = float(np.nanmax(np.abs(abl_data.values)))
 
     n_cols = len(all_ff_keys)
     fig, ax = plt.subplots(figsize=(max(8, 1.6 * n_cols), 5.4))
@@ -233,7 +239,7 @@ def plot_ablation_distributions(metrics_json: Path, output_dir: Path) -> Path:
     ablation_keys = sorted(
         ff for ff in per_ff if ff != _REFERENCE_LABEL and ff not in COLORBAR_EXCL
     )
-    excl_keys   = sorted(ff for ff in COLORBAR_EXCL if ff in per_ff)
+    excl_keys = sorted(ff for ff in COLORBAR_EXCL if ff in per_ff)
     all_ff_keys = ablation_keys + excl_keys
 
     merged_dfs = {
@@ -243,35 +249,39 @@ def plot_ablation_distributions(metrics_json: Path, output_dir: Path) -> Path:
 
     disp_map = {ff: _disp(ff) for ff in all_ff_keys}
 
-    n_ff   = len(all_ff_keys)
-    n_met  = len(HEATMAP_METRICS)
+    n_ff = len(all_ff_keys)
+    n_met = len(HEATMAP_METRICS)
     n_rows = n_met * 2
 
     fig, axes = plt.subplots(
-        n_rows, n_ff,
+        n_rows,
+        n_ff,
         figsize=(2.6 * n_ff, 2.6 * n_rows),
     )
 
     for m_idx, metric in enumerate(HEATMAP_METRICS):
         col_name = _METRIC_COLUMN[metric]
         hist_row = m_idx * 2
-        qq_row   = m_idx * 2 + 1
+        qq_row = m_idx * 2 + 1
 
         for c_idx, ff in enumerate(all_ff_keys):
-            mdf   = merged_dfs[ff]
-            diffs = (
-                mdf[f"{col_name}_ff"].to_numpy(float)
-                - mdf[f"{col_name}_ref"].to_numpy(float)
-            )
+            mdf = merged_dfs[ff]
+            diffs = mdf[f"{col_name}_ff"].to_numpy(float) - mdf[
+                f"{col_name}_ref"
+            ].to_numpy(float)
 
             sw_stat, sw_p = shapiro(diffs)
 
             # Histogram
             ax_h = axes[hist_row, c_idx]
-            ax_h.hist(diffs, bins=20, color="steelblue", edgecolor="white", linewidth=0.4)
+            ax_h.hist(
+                diffs, bins=20, color="steelblue", edgecolor="white", linewidth=0.4
+            )
             ax_h.axvline(0, color="black", linewidth=0.8, linestyle="--")
             ax_h.axvline(
-                diffs.mean(), color="tomato", linewidth=1.0,
+                diffs.mean(),
+                color="tomato",
+                linewidth=1.0,
                 label=f"mean={diffs.mean():.3f}",
             )
             ax_h.tick_params(labelsize=7)
@@ -290,10 +300,13 @@ def plot_ablation_distributions(metrics_json: Path, output_dir: Path) -> Path:
             ax_q.tick_params(labelsize=7)
             sw_color = "tomato" if sw_p < 0.05 else "forestgreen"
             ax_q.text(
-                0.03, 0.97,
+                0.03,
+                0.97,
                 f"S-W p={sw_p:.3g}",
                 transform=ax_q.transAxes,
-                fontsize=6, va="top", color=sw_color,
+                fontsize=6,
+                va="top",
+                color=sw_color,
             )
             if c_idx == 0:
                 ax_q.set_ylabel(f"{metric}\nSample quantiles", fontsize=8)
@@ -305,7 +318,8 @@ def plot_ablation_distributions(metrics_json: Path, output_dir: Path) -> Path:
         "Top rows: histogram (red = mean, dashed = zero) | "
         "Bottom rows: Q-Q vs normal — Shapiro-Wilk p shown "
         "(green = normal, red = non-normal at α=0.05)",
-        fontsize=10, y=1.01,
+        fontsize=10,
+        y=1.01,
     )
     plt.tight_layout()
     out_path = output_dir / "distributions.png"
