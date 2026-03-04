@@ -8,6 +8,8 @@ configfile: "workflow_config.yaml"
 RANDOM_SEED = config["random_seed"]
 TNET_500_FRAC_TEST = config["tnet500_frac_test"]
 
+############ Convenience Functions #############
+
 def smiles_dir_outputs(wildcards: Any, checkpoint_obj: Any, smiles_dir: str, output_pattern: str) -> list[str]:
     """Expand output_pattern over all .smi files in smiles_dir once checkpoint_obj is done."""
     checkpoint_obj.get()
@@ -33,6 +35,13 @@ def validation_force_fields(wildcards: Any) -> list[str]:
     )
 
 
+def yammbs_target_config(wildcards: Any) -> dict[str, Any]:
+    """Return yammbs config for a dataset/split target."""
+    return config["yammbs_analysis"]["targets"][wildcards.dataset][wildcards.dataset_type]
+
+############ Workflow Rules #############
+
+
 rule all:
     input:
         # TNet 500 validation force fields for different ablations
@@ -45,6 +54,10 @@ rule all:
         "benchmarking/tnet500/output/test/default/combined_force_field.offxml",
         # JACS Fragments
         "benchmarking/jacs_fragments/output/test/default/combined_force_field.offxml",
+        # yammbs torsion analyses
+        "benchmarking/tnet500/analysis/test/default/metrics.json",
+        "benchmarking/tnet500/analysis/validation/ablations/metrics.json",
+        "benchmarking/jacs_fragments/analysis/test/default/metrics.json",
 
 
 ############ General Rules #############
@@ -72,6 +85,32 @@ rule create_combined_force_field:
     shell:
         "pixi run -e default presto-benchmark combine-force-fields {output[0]} '{input.force_fields}'"
 
+rule analyse_torsion_scans_yammbs:
+    input:
+        qca_data_json="benchmarking/{dataset}/input/{dataset_type}/{dataset_type}.json",
+        combined_ff="benchmarking/{dataset}/output/{dataset_type}/{config_name}/combined_force_field.offxml",
+    output:
+        metrics_json="benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/metrics.json",
+        minimized_json="benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/minimized.json",
+        plot_png="benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/plots/rmse.png",
+    params:
+        analysis_dir=lambda wc: f"benchmarking/{wc.dataset}/analysis/{wc.dataset_type}/{wc.config_name}",
+        base_ff_opts=lambda wc: " ".join(
+            f"--base-force-field '{ff}'"
+            for ff in yammbs_target_config(wc).get(
+                "base_force_fields", config["yammbs_analysis"]["base_force_fields"]
+            )
+        ),
+        extra_ff_opts=lambda wc: " ".join(
+            f"--extra-force-field '{ff}'"
+            for ff in yammbs_target_config(wc)["extra_force_fields"]
+        ),
+    shell:
+        "pixi run -e default presto-benchmark analyse-torsion-scans "
+        "{input.qca_data_json} {input.combined_ff} {params.analysis_dir} "
+        "{params.base_ff_opts} {params.extra_ff_opts}"
+
+
 ############ TNet 500 #############
 
 rule get_tnet500_input:
@@ -95,6 +134,39 @@ checkpoint split_tnet500_input:
         "--frac-test {TNET_500_FRAC_TEST} --seed {RANDOM_SEED} "
         "--validation-output-path {output.validation_set_dir}"
 
+
+rule analyse_tnet500_validation_ablations:
+    input:
+        qca_data_json="benchmarking/tnet500/input/validation/validation.json",
+        default_ff="benchmarking/tnet500/output/validation/default/combined_force_field.offxml",
+        no_reg_ff="benchmarking/tnet500/output/validation/no_reg/combined_force_field.offxml",
+        no_min_ff="benchmarking/tnet500/output/validation/no_min/combined_force_field.offxml",
+        one_it_ff="benchmarking/tnet500/output/validation/one_it/combined_force_field.offxml",
+        no_metad_ff="benchmarking/tnet500/output/validation/no_metad/combined_force_field.offxml",
+    output:
+        metrics_json="benchmarking/tnet500/analysis/validation/ablations/metrics.json",
+        minimized_json="benchmarking/tnet500/analysis/validation/ablations/minimized.json",
+        plot_png="benchmarking/tnet500/analysis/validation/ablations/plots/rmse.png",
+        heatmap_png="benchmarking/tnet500/analysis/validation/ablations/plots/heatmap.png",
+        distributions_png="benchmarking/tnet500/analysis/validation/ablations/plots/distributions.png",
+    params:
+        analysis_dir="benchmarking/tnet500/analysis/validation/ablations",
+        base_ff_opts=" ".join(
+            f"--base-force-field '{ff}'"
+            for ff in config["yammbs_analysis"]["base_force_fields"]
+        ),
+    shell:
+        "pixi run -e default presto-benchmark analyse-torsion-scans "
+        "{input.qca_data_json} {input.default_ff} {params.analysis_dir} "
+        "{params.base_ff_opts} "
+        "--extra-force-field '{input.no_reg_ff}' "
+        "--extra-force-field '{input.no_min_ff}' "
+        "--extra-force-field '{input.one_it_ff}' "
+        "--extra-force-field '{input.no_metad_ff}' && "
+        "pixi run -e default presto-benchmark plot-ablation-comparison "
+        "{output.metrics_json} {params.analysis_dir}/plots"
+
+
 ############ JACS Fragments #############
 
 rule get_jacs_fragments_input:
@@ -116,6 +188,7 @@ checkpoint split_jacs_fragments_input:
         "--frac-test 1.0 --seed {RANDOM_SEED}"
 
 
+
 ############ Proteins #############
 
 rule get_1mer_backbone_input:
@@ -124,6 +197,13 @@ rule get_1mer_backbone_input:
     shell:
         "pixi run -e default presto-benchmark get-qca-torsion-input "
         "'OpenFF Protein Dipeptide 2-D TorsionDrive v2.0' {output[0]}"
+
+rule get_1mer_sidechain_input:
+    output:
+        "benchmarking/1mer_side_chain/input/1mer_side_chain.json"
+    shell:
+        "pixi run -e default presto-benchmark get-qca-torsion-input "
+        "'OpenFF Protein Dipeptide Sidechain TorsionDrive v1.0' {output[0]}"
 
 
 checkpoint split_1mer_backbone_input:

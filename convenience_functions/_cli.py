@@ -4,7 +4,7 @@ This module provides CLI commands for all convenience functions using typer.
 """
 
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 import typer
 
@@ -206,6 +206,61 @@ def get_qca_input_for_proteins_cli(
         data_output_path=data_output_path,
         names_output_path=names_output_path,
     )
+
+
+@app.command("analyse-torsion-scans")
+def analyse_torsion_scans_cli(
+    qcarchive_torsion_data: Path = typer.Argument(
+        ..., help="Input QCArchive torsion dataset JSON"
+    ),
+    combined_force_field: Path = typer.Argument(
+        ..., help="Path to the combined FF to include in analysis"
+    ),
+    output_dir: Path = typer.Argument(..., help="Output directory for analysis"),
+    base_force_fields: list[str] = typer.Option(
+        [], "--base-force-field", help="Base yammbs force field labels"
+    ),
+    extra_force_fields: list[str] = typer.Option(
+        [], "--extra-force-field", help="Additional local force field paths"
+    ),
+    method: Literal[
+        "openmm_torsion_atoms_frozen", "openmm_torsion_restrained"
+    ] = typer.Option(
+        "openmm_torsion_restrained",
+        help="MM optimization method",
+    ),
+    n_processes: Optional[int] = typer.Option(
+        None,
+        help="Number of parallel processes",
+    ),
+) -> None:
+    """Run yammbs torsion scan analysis and generate metrics/plots."""
+    from convenience_functions.yammbs_torsion_analysis import analyse_torsion_scans
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    analyse_torsion_scans(
+        qcarchive_torsion_data=qcarchive_torsion_data,
+        database_file=output_dir / "torsion-data.sqlite",
+        output_metrics=output_dir / "metrics.json",
+        output_minimized=output_dir / "minimized.json",
+        plot_dir=output_dir / "plots",
+        base_force_fields=base_force_fields,
+        extra_force_fields=[*extra_force_fields, str(combined_force_field)],
+        method=method,
+        n_processes=n_processes,
+    )
+
+
+@app.command("plot-ablation-comparison")
+def plot_ablation_comparison_cli(
+    metrics_json: Path = typer.Argument(..., help="Path to metrics.json from torsion scan analysis"),
+    output_dir: Path = typer.Argument(..., help="Output directory for plots"),
+) -> None:
+    """Generate ablation comparison heatmap and distribution plots."""
+    from convenience_functions.ablation_comparison import plot_ablation_comparison
+
+    plot_ablation_comparison(metrics_json=metrics_json, output_dir=output_dir)
 
 
 if __name__ == "__main__":

@@ -21,7 +21,6 @@ openff-toolkit = "*"
 openff-units = "*"
 openff-qcsubmit = ">=0.55.0"
 openff-interchange = "*"
-smirnoff-plugins = ">=2025.09.0"
 loguru = "*"
 seaborn = "*"
 snakemake = "*"
@@ -44,6 +43,7 @@ qcelemental = "*"
 nglview = "*"
 jupyter = "*"
 qcfractal = ">=0.63"
+
 
 [tool.pixi.feature.common.pypi-dependencies]
 presto-benchmark = { path = ".", editable = true }
@@ -69,8 +69,8 @@ mace-torch = "*"
 smee = { git = "https://github.com/openforcefield/smee.git", rev = "36bc8286b16ae815f13cfb10d8096ff1b9aeca0e" }
 descent = { git = "https://github.com/openforcefield/descent", rev = "15101d021d2a387809f0d877c61d4baabecdc78e" }
 presto = { git = "https://github.com/cole-group/presto.git", rev = "ecb2e96b4f317d1499266adeda607636959b232d"}
-# yammbs = { git = "https://github.com/openforcefield/yammbs", rev = "231f138de3f27582da65193679c15c371cc72236" }
-yammbs = { git = "https://github.com/openforcefield/yammbs", rev = "faster_datasets" }
+yammbs = { git = "https://github.com/openforcefield/yammbs", rev = "39f8200851979afde2c786656b544fe40d31cdf9" }
+smirnoff-plugins = { git = "https://github.com/fjclark/smirnoff-plugins", rev = "ba4e9883c16ecc4232e32b64cc8026c8de94c63a" }
 deepchem = { version = ">=2.7.0", extras = ["jax"] } # Seems to interfere with pytorch if ["torch"]
 
 [tool.pixi.feature.espaloma.dependencies]

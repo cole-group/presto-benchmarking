@@ -488,7 +488,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/slack_sdk-3.39.0-hd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/sleef-3.9.0-ha0421bc_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/smart_open-7.5.0-pyhcf101f3_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/smirnoff-plugins-2025.09.0-pyh5ded981_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/smmap-5.0.2-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/bioconda/noarch/snakemake-9.14.6-hdfd78af_0.conda
       - conda: https://conda.anaconda.org/bioconda/noarch/snakemake-executor-plugin-slurm-2.3.1-pyhdfd78af_0.conda
@@ -604,9 +603,10 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/ee/8c/83087ebc47ab0396ce092363001fa37c17153119ee282700c0713a195853/prettytable-3.17.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/90/cc/bb6395c3f2b6bb739b1d3fc0e71f94e6a1c2e256df496237cbfd13cd74a6/python_hostlist-2.3.0.tar.gz
       - pypi: git+https://github.com/openforcefield/smee.git?rev=36bc8286b16ae815f13cfb10d8096ff1b9aeca0e#36bc8286b16ae815f13cfb10d8096ff1b9aeca0e
+      - pypi: git+https://github.com/fjclark/smirnoff-plugins?rev=ba4e9883c16ecc4232e32b64cc8026c8de94c63a#ba4e9883c16ecc4232e32b64cc8026c8de94c63a
       - pypi: https://files.pythonhosted.org/packages/fb/12/5911ae3eeec47800503a238d971e51722ccea5feb8569b735184d5fcdbc0/toolz-1.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c0/f1/a47c831436595cffbfd69a19ea129a23627120b13f4886499e58775329d1/torch_ema-0.3-py3-none-any.whl
-      - pypi: git+https://github.com/openforcefield/yammbs?rev=faster_datasets#323904ba5a3332664cabc63c08937bf02f9a9070
+      - pypi: git+https://github.com/openforcefield/yammbs?rev=39f8200851979afde2c786656b544fe40d31cdf9#39f8200851979afde2c786656b544fe40d31cdf9
       - pypi: ./
   espaloma:
     channels:
@@ -1048,7 +1048,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/slack_sdk-3.40.1-hd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/sleef-3.9.0-ha0421bc_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/smart_open-7.5.1-pyhcf101f3_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/smirnoff-plugins-2025.09.0-pyh5ded981_2.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/smirnoff99frosst-1.1.0.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/smmap-5.0.2-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/bioconda/noarch/snakemake-9.16.3-hdfd78af_0.conda
@@ -9013,7 +9012,7 @@ packages:
 - pypi: ./
   name: presto-benchmark
   version: 0.1.0
-  sha256: 1c7e96e88e5b08a5505612c9982c2f838fb3f3eafd42e4b5b23046e1f5bae66a
+  sha256: 2fed5d264acbf38bb8fcdd38e166cbdcf5da251623cbbd9a92f9a71b06b3868c
   requires_python: '>=3.12'
 - pypi: https://files.pythonhosted.org/packages/ee/8c/83087ebc47ab0396ce092363001fa37c17153119ee282700c0713a195853/prettytable-3.17.0-py3-none-any.whl
   name: prettytable
@@ -10780,38 +10779,9 @@ packages:
   name: smee
   version: 0.16.3.dev8+g36bc8286b
   requires_python: '>=3.10'
-- conda: https://conda.anaconda.org/conda-forge/noarch/smirnoff-plugins-2025.09.0-pyh5ded981_1.conda
-  sha256: 9af6465eb54bd6263fadc3d0da480481384d5f44ca2ffd516cc9a7af5fb44547
-  md5: 08e381066831235fe47e3abb83bd32c3
-  depends:
-  - python >=3.11
-  - openff-toolkit >=0.16
-  - openff-interchange-base ~=0.4.6
-  - numpy
-  - openmm
-  - python
-  license: MIT
-  license_family: MIT
-  purls:
-  - pkg:pypi/smirnoff-plugins?source=hash-mapping
-  size: 45739
-  timestamp: 1768068663369
-- conda: https://conda.anaconda.org/conda-forge/noarch/smirnoff-plugins-2025.09.0-pyh5ded981_2.conda
-  sha256: b3e3ff50edef71794f6b6a020377024fecdb1733ee715dccfc834e80254b612b
-  md5: 08224621ab05c5a8d84a3937d8dfe523
-  depends:
-  - python >=3.11
-  - openff-toolkit-base >=0.16
-  - openff-interchange-base ~=0.4.6
-  - numpy
-  - openmm
-  - python
-  license: MIT
-  license_family: MIT
-  purls:
-  - pkg:pypi/smirnoff-plugins?source=hash-mapping
-  size: 45816
-  timestamp: 1771337523370
+- pypi: git+https://github.com/fjclark/smirnoff-plugins?rev=ba4e9883c16ecc4232e32b64cc8026c8de94c63a#ba4e9883c16ecc4232e32b64cc8026c8de94c63a
+  name: smirnoff-plugins
+  version: 2024.12.0+15.gba4e988
 - conda: https://conda.anaconda.org/conda-forge/noarch/smirnoff99frosst-1.1.0.1-pyhd8ed1ab_0.conda
   sha256: 9dc4355abdda5e2a224e24382e99b45545f66fc6a6855c72d24a36381e9601c8
   md5: f6666fc111b7d781b4ab5cd83175458e
@@ -12532,9 +12502,9 @@ packages:
   purls: []
   size: 85189
   timestamp: 1753484064210
-- pypi: git+https://github.com/openforcefield/yammbs?rev=faster_datasets#323904ba5a3332664cabc63c08937bf02f9a9070
+- pypi: git+https://github.com/openforcefield/yammbs?rev=39f8200851979afde2c786656b544fe40d31cdf9#39f8200851979afde2c786656b544fe40d31cdf9
   name: yammbs
-  version: 0.3.2.dev9+g323904ba5
+  version: 0.3.2.dev40+g39f820085
   requires_python: '>=3.11'
 - conda: https://conda.anaconda.org/conda-forge/linux-64/yarl-1.22.0-py312h8a5da7c_0.conda
   sha256: 6e3f2db09387fc982b5400b842745084825cd2d4621e8278e4af8fb0dc2b55d8

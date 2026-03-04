@@ -179,5 +179,7 @@ cython_debug/
 # Snakemake
 .snakemake/
 
-# Workflow input and output directories
-benchmarking
+# Workflow input and output directories — ignore everything except plots/ directories
+benchmarking/**
+!benchmarking/**/
+!benchmarking/**/plots/**

@@ -23,3 +23,25 @@ protein_force_fields:
   espaloma:
     ff_path: "dummy_ff.xml"
     ff_type: "espaloma"
+
+# yammbs torsion scan analysis configuration
+yammbs_analysis:
+  # Default base force fields passed to yammbs
+  base_force_fields:
+    - "openff-2.3.0"
+
+  # Per-target extra force fields
+  targets:
+    tnet500:
+      test:
+        extra_force_fields:
+          - "input_ff/esp04.offxml"
+          - "input_ff/aceff20.offxml"
+      validation:
+        # For validation, all ablation variants are included in analyse_tnet500_validation_ablations rule
+        extra_force_fields: []
+    jacs_fragments:
+      test:
+        extra_force_fields: []
+          #- "input_ff/openff_unconstrained-2.3.0.offxml"
+            #          - "input_ff/bespokefit1_sage_jacs_frags.offxml"
