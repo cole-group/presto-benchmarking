@@ -238,10 +238,10 @@ rule get_qca_input_for_protein_torsions:
 
 rule run_protein_torsion_minimisation:
     input:
-        qca_data_json="benchmarking/1mer_backbone/input/qca_data.json",
-        combined_ff="benchmarking/1mer_backbone/output/test/{config_name}/combined_force_field.offxml",
+        qca_data_json="benchmarking/{dataset_name}/input/qca_data.json",
+        combined_ff="benchmarking/{dataset_name}/output/test/{config_name}/combined_force_field.offxml",
     output:
-        protected(directory("benchmarking/1mer_backbone/analysis/{config_name}/minimised")),
+        protected(directory("benchmarking/{dataset_name}/analysis/{config_name}/minimised")),
     params:
         ff_config=config["protein_force_fields"],
     run:
@@ -263,10 +263,10 @@ rule run_protein_torsion_minimisation:
 
 rule plot_protein_torsion_analysis:
     input:
-        minimised_dir="benchmarking/1mer_backbone/analysis/{config_name}/minimised",
-        qca_names_json="benchmarking/1mer_backbone/input/qca_names.json",
+        minimised_dir="benchmarking/{dataset_name}/analysis/{config_name}/minimised",
+        qca_names_json="benchmarking/{dataset_name}/input/qca_names.json",
     output:
-        directory("benchmarking/1mer_backbone/analysis/{config_name}/plots"),
+        directory("benchmarking/{dataset_name}/analysis/{config_name}/plots"),
     shell:
         "pixi run -e default presto-benchmark plot-protein-torsion {input.minimised_dir} {output[0]} "
         "--names-file {input.qca_names_json}"

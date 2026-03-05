@@ -70,7 +70,7 @@ smee = { git = "https://github.com/openforcefield/smee.git", rev = "36bc8286b16a
 descent = { git = "https://github.com/openforcefield/descent", rev = "15101d021d2a387809f0d877c61d4baabecdc78e" }
 presto = { git = "https://github.com/cole-group/presto.git", rev = "ecb2e96b4f317d1499266adeda607636959b232d"}
 yammbs = { git = "https://github.com/openforcefield/yammbs", rev = "39f8200851979afde2c786656b544fe40d31cdf9" }
-smirnoff-plugins = { git = "https://github.com/fjclark/smirnoff-plugins", rev = "ba4e9883c16ecc4232e32b64cc8026c8de94c63a" }
+smirnoff-plugins = { git = "https://github.com/fjclark/smirnoff-plugins", rev = "f47cb6d9fc806dfbf1f4a4d08b219c33e4c80380" }
 deepchem = { version = ">=2.7.0", extras = ["jax"] } # Seems to interfere with pytorch if ["torch"]
 
 [tool.pixi.feature.espaloma.dependencies]

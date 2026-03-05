@@ -603,7 +603,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/ee/8c/83087ebc47ab0396ce092363001fa37c17153119ee282700c0713a195853/prettytable-3.17.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/90/cc/bb6395c3f2b6bb739b1d3fc0e71f94e6a1c2e256df496237cbfd13cd74a6/python_hostlist-2.3.0.tar.gz
       - pypi: git+https://github.com/openforcefield/smee.git?rev=36bc8286b16ae815f13cfb10d8096ff1b9aeca0e#36bc8286b16ae815f13cfb10d8096ff1b9aeca0e
-      - pypi: git+https://github.com/fjclark/smirnoff-plugins?rev=ba4e9883c16ecc4232e32b64cc8026c8de94c63a#ba4e9883c16ecc4232e32b64cc8026c8de94c63a
+      - pypi: git+https://github.com/fjclark/smirnoff-plugins?rev=f47cb6d9fc806dfbf1f4a4d08b219c33e4c80380#f47cb6d9fc806dfbf1f4a4d08b219c33e4c80380
       - pypi: https://files.pythonhosted.org/packages/fb/12/5911ae3eeec47800503a238d971e51722ccea5feb8569b735184d5fcdbc0/toolz-1.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c0/f1/a47c831436595cffbfd69a19ea129a23627120b13f4886499e58775329d1/torch_ema-0.3-py3-none-any.whl
       - pypi: git+https://github.com/openforcefield/yammbs?rev=39f8200851979afde2c786656b544fe40d31cdf9#39f8200851979afde2c786656b544fe40d31cdf9
@@ -9012,7 +9012,7 @@ packages:
 - pypi: ./
   name: presto-benchmark
   version: 0.1.0
-  sha256: 2fed5d264acbf38bb8fcdd38e166cbdcf5da251623cbbd9a92f9a71b06b3868c
+  sha256: 5ae9a07f8803502e6b323fa3ffc06bf5dd24805ac448c1ed8481be46997b22a3
   requires_python: '>=3.12'
 - pypi: https://files.pythonhosted.org/packages/ee/8c/83087ebc47ab0396ce092363001fa37c17153119ee282700c0713a195853/prettytable-3.17.0-py3-none-any.whl
   name: prettytable
@@ -10779,9 +10779,9 @@ packages:
   name: smee
   version: 0.16.3.dev8+g36bc8286b
   requires_python: '>=3.10'
-- pypi: git+https://github.com/fjclark/smirnoff-plugins?rev=ba4e9883c16ecc4232e32b64cc8026c8de94c63a#ba4e9883c16ecc4232e32b64cc8026c8de94c63a
+- pypi: git+https://github.com/fjclark/smirnoff-plugins?rev=f47cb6d9fc806dfbf1f4a4d08b219c33e4c80380#f47cb6d9fc806dfbf1f4a4d08b219c33e4c80380
   name: smirnoff-plugins
-  version: 2024.12.0+15.gba4e988
+  version: 2024.12.0+17.gf47cb6d
 - conda: https://conda.anaconda.org/conda-forge/noarch/smirnoff99frosst-1.1.0.1-pyhd8ed1ab_0.conda
   sha256: 9dc4355abdda5e2a224e24382e99b45545f66fc6a6855c72d24a36381e9601c8
   md5: f6666fc111b7d781b4ab5cd83175458e

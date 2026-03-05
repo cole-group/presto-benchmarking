@@ -14,6 +14,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.stats import binomtest, probplot, shapiro
+from statsmodels.stats.multitest import multipletests
 
 matplotlib.use("Agg")
 
@@ -65,15 +66,8 @@ def _sign_test_pvalue(ref_vals: np.ndarray, ff_vals: np.ndarray) -> float:
 
 
 def _holm_bonferroni(p_values: list) -> list:
-    m = len(p_values)
-    order = sorted(range(m), key=lambda i: p_values[i])
-    adjusted = [0.0] * m
-    running_max = 0.0
-    for rank, orig_idx in enumerate(order):
-        corrected = min(p_values[orig_idx] * (m - rank), 1.0)
-        running_max = max(running_max, corrected)
-        adjusted[orig_idx] = running_max
-    return adjusted
+    _, adjusted, _, _ = multipletests(p_values, method="holm")
+    return adjusted.tolist()
 
 
 def _stars(p: float) -> str:
