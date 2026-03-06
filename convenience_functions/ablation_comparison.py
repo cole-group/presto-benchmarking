@@ -13,8 +13,13 @@ import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
 import seaborn as sns
-from scipy.stats import binomtest, probplot, shapiro
-from statsmodels.stats.multitest import multipletests
+from scipy.stats import probplot, shapiro
+from convenience_functions._plotting_defaults import FORCE_FIELD_DISPLAY_MAP
+from convenience_functions._stats import (
+    holm_bonferroni,
+    pvalue_to_stars,
+    sign_test_pvalue,
+)
 
 matplotlib.use("Agg")
 
@@ -22,15 +27,6 @@ HEATMAP_METRICS = ["RMSD", "RMSE", "Mean JSD (500 K)"]
 
 # Keys excluded from colorbar scaling (still displayed; large values saturate the scale)
 COLORBAR_EXCL = {"openff-2.3.0"}
-
-FORCE_FIELD_DISPLAY_MAP = {
-    "default": "Default",
-    "no_metad": "No metadynamics",
-    "no_min": "No minimised samples",
-    "no_reg": "No regularisation",
-    "one_it": "One Iteration",
-    "openff-2.3.0": "OpenFF 2.3.0",
-}
 
 _METRIC_COLUMN = {"RMSD": "rmsd", "RMSE": "rmse", "Mean JSD (500 K)": "js_distance"}
 _REFERENCE_LABEL = "default"
@@ -57,27 +53,8 @@ def _aggregate(values: np.ndarray, metric_label: str) -> float:
 
 
 def _sign_test_pvalue(ref_vals: np.ndarray, ff_vals: np.ndarray) -> float:
-    diffs = ff_vals - ref_vals
-    n_non_zero = int(np.sum(diffs != 0))
-    if n_non_zero == 0:
-        return 1.0
-    n_pos = int(np.sum(diffs > 0))
-    return float(binomtest(n_pos, n_non_zero, p=0.5, alternative="two-sided").pvalue)
-
-
-def _holm_bonferroni(p_values: list) -> list:
-    _, adjusted, _, _ = multipletests(p_values, method="holm")
-    return adjusted.tolist()
-
-
-def _stars(p: float) -> str:
-    if p < 0.001:
-        return "***"
-    if p < 0.01:
-        return "**"
-    if p < 0.05:
-        return "*"
-    return ""
+    """Wrapper: sign test with (ff - ref) convention."""
+    return sign_test_pvalue(ref_vals, ff_vals)
 
 
 def _disp(ff_key: str) -> str:
@@ -137,8 +114,10 @@ def _build_pct_and_stars(
         )
         for ff, metric in test_keys
     ]
-    adj_pvals = _holm_bonferroni(raw_pvals)
-    stars_map = {k: _stars(p) for k, p in zip(test_keys, adj_pvals)}
+    adj_pvals = holm_bonferroni(raw_pvals)
+    stars_map = {
+        k: pvalue_to_stars(p, show_ns=False) for k, p in zip(test_keys, adj_pvals)
+    }
 
     annot = pd.DataFrame(index=HEATMAP_METRICS, columns=all_ff_keys, dtype=object)
     for metric in HEATMAP_METRICS:

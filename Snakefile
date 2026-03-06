@@ -117,6 +117,8 @@ rule analyse_torsion_scans_yammbs:
         metrics_json="benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/metrics.json",
         minimized_json="benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/minimized.json",
         plot_png="benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/plots/rmse.png",
+        paired_stats_png="benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/plots/paired_stats.png",
+        paired_stats_no_sig_png="benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/plots/paired_stats_no_sig.png",
     params:
         analysis_dir=lambda wc: f"benchmarking/{wc.dataset}/analysis/{wc.dataset_type}/{wc.config_name}",
         base_ff_opts=lambda wc: " ".join(

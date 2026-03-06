@@ -7,13 +7,31 @@ from pathlib import Path
 from typing import Literal
 
 import numpy as np
+import pandas as pd
+from itertools import combinations
 from matplotlib import pyplot
 
+from convenience_functions._plotting_defaults import (
+    FORCE_FIELD_DISPLAY_MAP,
+    METRIC_CDF_XLIM,
+    METRIC_LABELS,
+    METRIC_UNITS,
+)
 from yammbs.torsion import TorsionStore
 from yammbs.torsion.inputs import QCArchiveTorsionDataset
 from yammbs.torsion.outputs import MetricCollection
 
 pyplot.style.use("ggplot")
+
+PAIRED_METRIC_CONFIGS = [
+    {"key": "rmsd", "label": METRIC_LABELS["rmsd"], "units": METRIC_UNITS["rmsd"]},
+    {"key": "rmse", "label": METRIC_LABELS["rmse"], "units": METRIC_UNITS["rmse"]},
+    {
+        "key": "js_distance",
+        "label": METRIC_LABELS["js_distance"],
+        "units": METRIC_UNITS["js_distance"],
+    },
+]
 
 
 def analyse_torsion_scans(
@@ -67,6 +85,12 @@ def analyse_torsion_scans(
     plot_rms_stats(output_metrics=output_metrics, plot_dir=plot_dir)
     plot_mean_error_distribution(output_metrics=output_metrics, plot_dir=plot_dir)
     plot_rms_js_distance(output_metrics=output_metrics, plot_dir=plot_dir)
+    plot_paired_stats(
+        output_metrics=output_metrics, plot_dir=plot_dir, show_significance=True
+    )
+    plot_paired_stats(
+        output_metrics=output_metrics, plot_dir=plot_dir, show_significance=False
+    )
 
 
 def _get_rms(array: np.ndarray) -> float:
@@ -77,16 +101,8 @@ def plot_cdfs(output_metrics: Path, plot_dir: Path) -> None:
     """Plot CDFs for rmsd, rmse, and Jensen-Shannon distance."""
     metrics = MetricCollection.parse_file(output_metrics)
 
-    x_ranges = {
-        "rmsd": (0, 0.14),
-        "rmse": (-0.3, 5.0),
-        "js_distance": (None, None),
-    }
-    units = {
-        "rmsd": r"$\mathrm{\AA}$",
-        "rmse": r"kcal mol$^{-1}$",
-        "js_distance": "",
-    }
+    x_ranges = METRIC_CDF_XLIM
+    units = METRIC_UNITS
 
     force_fields = list(metrics.metrics.keys())
 
@@ -148,10 +164,7 @@ def plot_rms_stats(output_metrics: Path, plot_dir: Path) -> None:
     metrics = MetricCollection.parse_file(output_metrics)
     force_fields = list(metrics.metrics.keys())
 
-    units = {
-        "rmsd": r"$\mathrm{\AA}$",
-        "rmse": r"kcal mol$^{-1}$",
-    }
+    units = METRIC_UNITS
 
     rms_rmses = {
         force_field: _get_rms(
@@ -210,8 +223,124 @@ def plot_rms_js_distance(output_metrics: Path, plot_dir: Path) -> None:
     pyplot.close(figure)
 
 
+def plot_paired_stats(
+    output_metrics: Path,
+    plot_dir: Path,
+    ff_order: list[str] | None = None,
+    ff_display_names: dict[str, str] | None = None,
+    show_significance: bool = True,
+) -> None:
+    """Plot paired per-molecule statistics for RMSD, RMSE, and JSD on a single figure.
+
+    Parameters
+    ----------
+    output_metrics:
+        Path to the ``metrics.json`` produced by :func:`analyse_torsion_scans`.
+    plot_dir:
+        Directory to write the output plot.
+    ff_order:
+        Desired left-to-right ordering of force fields (raw labels).  Any FF
+        not found in the data is ignored.  If *None* the FFs are sorted by
+        ascending mean RMSE so the lowest-error one appears leftmost.
+    ff_display_names:
+        Mapping from raw FF label to human-readable display name.  Unmapped
+        labels are shown as-is.
+    show_significance:
+        When *True* (default) annotate pairwise significance brackets using
+        the sign test with Holm-Bonferroni correction.
+    """
+    import pingouin
+    from statannotations.Annotator import Annotator
+    from convenience_functions._stats import (
+        holm_bonferroni,
+        pvalue_to_stars,
+        sign_test_pvalue,
+    )
+
+    metrics = MetricCollection.parse_file(output_metrics)
+    all_ffs = list(metrics.metrics.keys())
+    ff_display = (
+        ff_display_names if ff_display_names is not None else FORCE_FIELD_DISPLAY_MAP
+    )
+
+    # Build per-metric arrays
+    data_arrays: dict[str, dict[str, np.ndarray]] = {}
+    for cfg in PAIRED_METRIC_CONFIGS:
+        key = cfg["key"]
+        if key != "js_distance":
+            data_arrays[key] = {
+                ff: np.array(
+                    [getattr(val, key) for val in metrics.metrics[ff].values()]
+                )
+                for ff in all_ffs
+            }
+        else:
+            data_arrays[key] = {
+                ff: np.array(
+                    [val.js_distance[0] for val in metrics.metrics[ff].values()]
+                )
+                for ff in all_ffs
+            }
+
+    # Determine display order
+    if ff_order is not None:
+        ordered_ffs = [ff for ff in ff_order if ff in all_ffs]
+    else:
+        ordered_ffs = sorted(all_ffs, key=lambda ff: np.mean(data_arrays["rmse"][ff]))
+
+    display_names = [ff_display.get(ff, ff) for ff in ordered_ffs]
+
+    pair_indices = list(combinations(range(len(ordered_ffs)), 2))
+    pairs_display = [(display_names[i], display_names[j]) for i, j in pair_indices]
+
+    fig, axes = pyplot.subplots(1, 3, figsize=(14, 4.5))
+
+    for ax, cfg in zip(axes, PAIRED_METRIC_CONFIGS):
+        key = cfg["key"]
+        arr = data_arrays[key]
+
+        entries = []
+        for ff, disp in zip(ordered_ffs, display_names):
+            for idx, val in enumerate(arr[ff]):
+                entries.append({"subject": idx, key: val, "force_field": disp})
+        df = pd.DataFrame(entries)
+
+        pingouin.plot_paired(
+            data=df,
+            dv=key,
+            within="force_field",
+            subject="subject",
+            order=display_names,
+            ax=ax,
+            pointplot_kwargs={"alpha": 0.2},
+        )
+
+        if show_significance:
+            raw_pvals = [
+                sign_test_pvalue(arr[ordered_ffs[i]], arr[ordered_ffs[j]])
+                for i, j in pair_indices
+            ]
+            corrected = holm_bonferroni(raw_pvals)
+            star_labels = [pvalue_to_stars(p) for p in corrected]
+
+            annotator = Annotator(
+                ax, pairs_display, data=df, x="force_field", y=key, order=display_names
+            )
+            annotator.configure(test=None, verbose=0)
+            annotator.set_custom_annotations(star_labels)
+            annotator.annotate()
+
+        ax.set_ylabel(f"{cfg['label']} / {cfg['units']}")
+        ax.set_xlabel("")
+        pyplot.setp(ax.get_xticklabels(), rotation=20, ha="center")
+
+    fig.tight_layout()
+    suffix = "" if show_significance else "_no_sig"
+    fig.savefig(plot_dir / f"paired_stats{suffix}.png", dpi=300, bbox_inches="tight")
+    pyplot.close(fig)
+
+
 def plot_mean_error_distribution(output_metrics: Path, plot_dir: Path) -> None:
-    """Plot KDE distribution of mean errors for each force field."""
     import seaborn as sns
 
     metrics = MetricCollection.parse_file(output_metrics)
