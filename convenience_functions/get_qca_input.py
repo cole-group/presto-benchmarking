@@ -8,6 +8,7 @@ from typing import Optional, Union
 import loguru
 import qcelemental
 from openff.qcsubmit.results import TorsionDriveResultCollection
+from openff.qcsubmit.results.filters import SMILESFilter
 from qcelemental.models.procedures import TorsionDriveResult
 from qcportal import PortalClient
 from yammbs.torsion.inputs import QCArchiveTorsionDataset, QCArchiveTorsionProfile
@@ -17,10 +18,19 @@ BOHR2ANGSTROMS = qcelemental.constants.bohr2angstroms
 
 
 def get_qca_torsion_input(
-    dataset_name: str, json_output_path: Path, spec_name: str = "default"
+    dataset_name: str,
+    json_output_path: Path,
+    spec_name: str = "default",
+    exclude_smiles: list[str] | None = None,
 ) -> None:
-    """Download a torsion dataset from QCArchive and save it as JSON."""
+    """Download a torsion dataset from QCArchive and save it as JSON.
 
+    Parameters
+    ----------
+    exclude_smiles:
+        SMILES of molecules to exclude before saving.  Useful for removing
+        known-bad molecules from a dataset.
+    """
     cache_dir = json_output_path.parent / ".cache"
     cache_dir.mkdir(exist_ok=True, parents=True)
 
@@ -31,6 +41,14 @@ def get_qca_torsion_input(
         datasets=dataset_name,
         spec_name=spec_name,
     )
+
+    if exclude_smiles:
+        n_before = sum(len(recs) for recs in dataset.entries.values())
+        dataset = dataset.filter(SMILESFilter(smiles_to_exclude=exclude_smiles))
+        n_after = sum(len(recs) for recs in dataset.entries.values())
+        loguru.logger.info(
+            f"Excluded {n_before - n_after} records by SMILES; {n_after} records remain."
+        )
 
     dataset = QCArchiveTorsionDataset.from_qcsubmit_collection(dataset)
 

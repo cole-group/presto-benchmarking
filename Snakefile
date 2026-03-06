@@ -47,6 +47,12 @@ def validation_force_fields(wildcards: Any) -> list[str]:
     )
 
 
+def qca_exclude_smiles_opts(dataset_name: str) -> str:
+    """Return --exclude-smiles CLI flags for a QCA dataset, from workflow_config.yaml."""
+    smiles = config.get("exclude_smiles", {}).get(dataset_name, [])
+    return " ".join(f"--exclude-smiles '{s}'" for s in smiles)
+
+
 def yammbs_target_config(wildcards: Any) -> dict[str, Any]:
     """Return yammbs config for a dataset/split target."""
     return config["yammbs_analysis"]["targets"][wildcards.dataset][wildcards.dataset_type]
@@ -199,9 +205,11 @@ rule analyse_tnet500_validation_ablations:
 rule get_jacs_fragments_input:
     output:
         "benchmarking/jacs_fragments/input/jacs_fragments.json"
+    params:
+        exclude_opts=lambda wc: qca_exclude_smiles_opts("OpenFF-benchmark-ligand-fragments-v2.0"),
     shell:
         "pixi run -e default presto-benchmark get-qca-torsion-input "
-        "'OpenFF-benchmark-ligand-fragments-v2.0' {output[0]}"
+        "'OpenFF-benchmark-ligand-fragments-v2.0' {output[0]} {params.exclude_opts}"
 
 
 
@@ -212,23 +220,29 @@ rule get_jacs_fragments_input:
 rule get_1mer_backbone_input:
     output:
         "benchmarking/1mer_backbone/input/1mer_backbone.json"
+    params:
+        exclude_opts=lambda wc: qca_exclude_smiles_opts("OpenFF Protein Dipeptide 2-D TorsionDrive v2.0"),
     shell:
         "pixi run -e default presto-benchmark get-qca-torsion-input "
-        "'OpenFF Protein Dipeptide 2-D TorsionDrive v2.0' {output[0]}"
+        "'OpenFF Protein Dipeptide 2-D TorsionDrive v2.0' {output[0]} {params.exclude_opts}"
 
 rule get_3mer_backbone_input:
     output:
         "benchmarking/3mer_backbone/input/3mer_backbone.json"
+    params:
+        exclude_opts=lambda wc: qca_exclude_smiles_opts("OpenFF Protein Capped 3-mer Backbones v1.0"),
     shell:
         "pixi run -e default presto-benchmark get-qca-torsion-input "
-        "'OpenFF Protein Capped 3-mer Backbones v1.0' {output[0]}"
+        "'OpenFF Protein Capped 3-mer Backbones v1.0' {output[0]} {params.exclude_opts}"
 
 rule get_1mer_sidechain_input:
     output:
         "benchmarking/1mer_side_chain/input/1mer_side_chain.json"
+    params:
+        exclude_opts=lambda wc: qca_exclude_smiles_opts("OpenFF Protein Dipeptide Sidechain TorsionDrive v1.0"),
     shell:
         "pixi run -e default presto-benchmark get-qca-torsion-input "
-        "'OpenFF Protein Dipeptide Sidechain TorsionDrive v1.0' {output[0]}"
+        "'OpenFF Protein Dipeptide Sidechain TorsionDrive v1.0' {output[0]} {params.exclude_opts}"
 
 rule get_qca_input_for_protein_torsions:
     output:

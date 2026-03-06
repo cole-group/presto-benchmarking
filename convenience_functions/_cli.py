@@ -58,6 +58,9 @@ def combine_force_fields_cli(
 def get_qca_torsion_input_cli(
     dataset_name: str = typer.Argument(..., help="Name of the QCA dataset to retrieve"),
     json_output_path: Path = typer.Argument(..., help="Path for output JSON file"),
+    exclude_smiles: list[str] = typer.Option(
+        [], "--exclude-smiles", help="SMILES of a molecule to exclude (repeatable)"
+    ),
 ) -> None:
     """Retrieve QCA torsion input data."""
     from convenience_functions.get_qca_input import get_qca_torsion_input
@@ -65,6 +68,7 @@ def get_qca_torsion_input_cli(
     get_qca_torsion_input(
         dataset_name=dataset_name,
         json_output_path=json_output_path,
+        exclude_smiles=exclude_smiles or None,
     )
 
 
