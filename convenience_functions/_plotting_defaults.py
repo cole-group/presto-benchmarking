@@ -22,6 +22,9 @@ FORCE_FIELD_DISPLAY_MAP: dict[str, str] = {
     "input_ff/aceff20.offxml": "AceFF 2.0",
     # Presto bespoke FF paths (tnet500 test set)
     "benchmarking/tnet500/output/test/default/combined_force_field.offxml": "presto",
+    # JACS Fragments
+    "benchmarking/jacs_fragments/output/test/default/combined_force_field.offxml": "presto",
+    "input_ff/bespokefit1_sage_jacs_frags.offxml": "OpenFF BespokeFit /\n B3LYP-D3BJ/DZVP",
 }
 
 # ---------------------------------------------------------------------------
@@ -44,7 +47,7 @@ METRIC_UNITS: dict[str, str] = {
 
 # Suggested x-axis limits for CDF plots (None = auto).
 METRIC_CDF_XLIM: dict[str, tuple[float | None, float | None]] = {
-    "rmsd": (0, 0.14),
+    "rmsd": (0, 0.5),
     "rmse": (-0.3, 5.0),
     "js_distance": (None, None),
 }
