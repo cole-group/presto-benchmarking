@@ -42,6 +42,7 @@ yammbs_analysis:
         extra_force_fields: []
     jacs_fragments:
       test:
-        extra_force_fields: []
+        extra_force_fields:
+          - "input_ff/bespokefit1_sage_jacs_frags.offxml"
+          - "input_ff/esp04.offxml"
           #- "input_ff/openff_unconstrained-2.3.0.offxml"
-            #          - "input_ff/bespokefit1_sage_jacs_frags.offxml"

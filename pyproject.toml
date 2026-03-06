@@ -20,7 +20,7 @@ pip = "*"
 openff-toolkit = "*"
 openff-units = "*"
 openff-qcsubmit = ">=0.55.0"
-openff-interchange = "*"
+openff-interchange = ">=0.5.2"
 loguru = "*"
 seaborn = "*"
 snakemake = "*"
@@ -69,8 +69,8 @@ mace-torch = "*"
 smee = { git = "https://github.com/openforcefield/smee.git", rev = "36bc8286b16ae815f13cfb10d8096ff1b9aeca0e" }
 descent = { git = "https://github.com/openforcefield/descent", rev = "15101d021d2a387809f0d877c61d4baabecdc78e" }
 presto = { git = "https://github.com/cole-group/presto.git", rev = "ecb2e96b4f317d1499266adeda607636959b232d"}
-yammbs = { git = "https://github.com/openforcefield/yammbs", rev = "39f8200851979afde2c786656b544fe40d31cdf9" }
-smirnoff-plugins = { git = "https://github.com/fjclark/smirnoff-plugins", rev = "f47cb6d9fc806dfbf1f4a4d08b219c33e4c80380" }
+yammbs = { git = "https://github.com/fjclark/yammbs", rev = "b89f9798db32e08049840035d937cba0375c38eb" }
+smirnoff-plugins = { git = "https://github.com/fjclark/smirnoff-plugins", rev = "8b45123f11498f22e29a57aeb6ac8697715f8429" }
 deepchem = { version = ">=2.7.0", extras = ["jax"] } # Seems to interfere with pytorch if ["torch"]
 
 [tool.pixi.feature.espaloma.dependencies]

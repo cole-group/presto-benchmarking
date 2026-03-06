@@ -131,6 +131,7 @@ rule analyse_torsion_scans_yammbs:
         ),
     shell:
         "pixi run -e default presto-benchmark analyse-torsion-scans "
+        #"--n-processes 7 "
         "{input.qca_data_json} {input.combined_ff} {params.analysis_dir} "
         "{params.base_ff_opts} {params.extra_ff_opts}"
 
@@ -229,8 +230,8 @@ rule get_1mer_sidechain_input:
 
 rule get_qca_input_for_protein_torsions:
     output:
-        qca_data_json="benchmarking/1mer_backbone/input/qca_data.json",
-        qca_names_json="benchmarking/1mer_backbone/input/qca_names.json",
+        qca_data_json="benchmarking/{dataset}/input/qca_data.json",
+        qca_names_json="benchmarking/{dataset}/input/qca_names.json",
     shell:
         "pixi run -e default presto-benchmark get-qca-input-proteins "
         "'OpenFF Protein Dipeptide 2-D TorsionDrive v2.0' "
@@ -238,10 +239,10 @@ rule get_qca_input_for_protein_torsions:
 
 rule run_protein_torsion_minimisation:
     input:
-        qca_data_json="benchmarking/{dataset_name}/input/qca_data.json",
-        combined_ff="benchmarking/{dataset_name}/output/test/{config_name}/combined_force_field.offxml",
+        qca_data_json="benchmarking/{dataset}/input/qca_data.json",
+        combined_ff="benchmarking/{dataset}/output/{dataset_type}/{config_name}/combined_force_field.offxml",
     output:
-        protected(directory("benchmarking/{dataset_name}/analysis/{config_name}/minimised")),
+        protected(directory("benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/minimised")),
     params:
         ff_config=config["protein_force_fields"],
     run:
@@ -263,10 +264,10 @@ rule run_protein_torsion_minimisation:
 
 rule plot_protein_torsion_analysis:
     input:
-        minimised_dir="benchmarking/{dataset_name}/analysis/{config_name}/minimised",
-        qca_names_json="benchmarking/{dataset_name}/input/qca_names.json",
+        minimised_dir="benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/minimised",
+        qca_names_json="benchmarking/{dataset}/input/qca_names.json",
     output:
-        directory("benchmarking/{dataset_name}/analysis/{config_name}/plots"),
+        directory("benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/plots"),
     shell:
         "pixi run -e default presto-benchmark plot-protein-torsion {input.minimised_dir} {output[0]} "
         "--names-file {input.qca_names_json}"

@@ -354,8 +354,8 @@ environments:
       - conda: https://conda.anaconda.org/openeye/linux-64/openeye-toolkits-2025.2.1-py312_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/openff-amber-ff-ports-2025.09.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/openff-forcefields-2026.01.0-pyhd8ed1ab_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/openff-interchange-0.4.11-pyhd8ed1ab_1.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/openff-interchange-base-0.4.11-pyhd8ed1ab_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/openff-interchange-0.5.2-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/openff-interchange-base-0.5.2-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/openff-nagl-0.5.4-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/openff-nagl-base-0.5.4-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/openff-nagl-models-2025.9.0-pyhd8ed1ab_0.conda
@@ -603,10 +603,10 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/ee/8c/83087ebc47ab0396ce092363001fa37c17153119ee282700c0713a195853/prettytable-3.17.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/90/cc/bb6395c3f2b6bb739b1d3fc0e71f94e6a1c2e256df496237cbfd13cd74a6/python_hostlist-2.3.0.tar.gz
       - pypi: git+https://github.com/openforcefield/smee.git?rev=36bc8286b16ae815f13cfb10d8096ff1b9aeca0e#36bc8286b16ae815f13cfb10d8096ff1b9aeca0e
-      - pypi: git+https://github.com/fjclark/smirnoff-plugins?rev=f47cb6d9fc806dfbf1f4a4d08b219c33e4c80380#f47cb6d9fc806dfbf1f4a4d08b219c33e4c80380
+      - pypi: git+https://github.com/fjclark/smirnoff-plugins?rev=8b45123f11498f22e29a57aeb6ac8697715f8429#8b45123f11498f22e29a57aeb6ac8697715f8429
       - pypi: https://files.pythonhosted.org/packages/fb/12/5911ae3eeec47800503a238d971e51722ccea5feb8569b735184d5fcdbc0/toolz-1.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c0/f1/a47c831436595cffbfd69a19ea129a23627120b13f4886499e58775329d1/torch_ema-0.3-py3-none-any.whl
-      - pypi: git+https://github.com/openforcefield/yammbs?rev=39f8200851979afde2c786656b544fe40d31cdf9#39f8200851979afde2c786656b544fe40d31cdf9
+      - pypi: git+https://github.com/fjclark/yammbs?rev=b89f9798db32e08049840035d937cba0375c38eb#b89f9798db32e08049840035d937cba0375c38eb
       - pypi: ./
   espaloma:
     channels:
@@ -927,8 +927,8 @@ environments:
       - conda: https://conda.anaconda.org/openeye/linux-64/openeye-toolkits-2025.2.1-py312_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/openff-amber-ff-ports-2025.09.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/openff-forcefields-2026.01.0-pyhd8ed1ab_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/openff-interchange-0.4.11-pyhd8ed1ab_1.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/openff-interchange-base-0.4.11-pyhd8ed1ab_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/openff-interchange-0.5.2-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/openff-interchange-base-0.5.2-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/openff-nagl-0.5.4-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/openff-nagl-base-0.5.4-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/openff-nagl-models-2025.9.0-pyhd8ed1ab_0.conda
@@ -7958,11 +7958,11 @@ packages:
   - pkg:pypi/openforcefields?source=hash-mapping
   size: 118532
   timestamp: 1768284405101
-- conda: https://conda.anaconda.org/conda-forge/noarch/openff-interchange-0.4.11-pyhd8ed1ab_1.conda
-  sha256: 8a9108f7e5b7957eebbe5e48b5daab133a54839d0b9c7b024c79f846f256734a
-  md5: f9664a6de9711f29cd859bc2b7ef8d23
+- conda: https://conda.anaconda.org/conda-forge/noarch/openff-interchange-0.5.2-pyhd8ed1ab_0.conda
+  sha256: b3e15d74848dc27a9f3f4a62bb19a7fbad7c15beb7b7f8d830542123b5916690
+  md5: b667da0d26a7e9f5234028e7265bf524
   depends:
-  - openff-interchange-base 0.4.11 pyhd8ed1ab_1
+  - openff-interchange-base 0.5.2 pyhd8ed1ab_0
   - openff-toolkit >=0.17.0,<0.19
   - openmm 8.*
   - pyedr
@@ -7970,11 +7970,11 @@ packages:
   license: MIT
   license_family: MIT
   purls: []
-  size: 8417
-  timestamp: 1767751054502
-- conda: https://conda.anaconda.org/conda-forge/noarch/openff-interchange-base-0.4.11-pyhd8ed1ab_1.conda
-  sha256: ca998f6a0aa0516045f5777185c699e84732edf7802b8fa2091c6dd523f47da3
-  md5: 58b7694dbb1d32d2428b66330243365e
+  size: 8500
+  timestamp: 1772496921112
+- conda: https://conda.anaconda.org/conda-forge/noarch/openff-interchange-base-0.5.2-pyhd8ed1ab_0.conda
+  sha256: 47fe4b3b12c11540d17cbb20f96359541a0c0e8b9f681fa71a78eb2e915a292b
+  md5: 5f8bce63ca0ef1faa52fbcaf7db51607
   depends:
   - numpy <2.5
   - openff-toolkit-base >=0.16.0,<0.19
@@ -7983,17 +7983,17 @@ packages:
   - pydantic >=2,<3,<2.12
   - python >=3.11,<3.14.0a0
   constrains:
-  - jaxlib >=0.3
   - jax >=0.3
-  - foyer =1
   - smirnoff-plugins >=2024.07.0
+  - jaxlib >=0.3
+  - foyer =1
   - lammps >=2023.08.02
   license: MIT
   license_family: MIT
   purls:
   - pkg:pypi/openff-interchange?source=hash-mapping
-  size: 705371
-  timestamp: 1767751038827
+  size: 700362
+  timestamp: 1772496904797
 - conda: https://conda.anaconda.org/conda-forge/noarch/openff-nagl-0.5.4-pyhd8ed1ab_1.conda
   sha256: 607df80ceff8320dc9b9f30cdc403d91b9fd6f686b98aa2c065c04beb4ca9583
   md5: 9be58005f9ec3010dc9bb94dc22a46e5
@@ -9012,7 +9012,7 @@ packages:
 - pypi: ./
   name: presto-benchmark
   version: 0.1.0
-  sha256: 5ae9a07f8803502e6b323fa3ffc06bf5dd24805ac448c1ed8481be46997b22a3
+  sha256: 6a28ba5792b55403cdf6bff307ad375cd392f7428aee19a03e4466a7ff645205
   requires_python: '>=3.12'
 - pypi: https://files.pythonhosted.org/packages/ee/8c/83087ebc47ab0396ce092363001fa37c17153119ee282700c0713a195853/prettytable-3.17.0-py3-none-any.whl
   name: prettytable
@@ -10779,9 +10779,9 @@ packages:
   name: smee
   version: 0.16.3.dev8+g36bc8286b
   requires_python: '>=3.10'
-- pypi: git+https://github.com/fjclark/smirnoff-plugins?rev=f47cb6d9fc806dfbf1f4a4d08b219c33e4c80380#f47cb6d9fc806dfbf1f4a4d08b219c33e4c80380
+- pypi: git+https://github.com/fjclark/smirnoff-plugins?rev=8b45123f11498f22e29a57aeb6ac8697715f8429#8b45123f11498f22e29a57aeb6ac8697715f8429
   name: smirnoff-plugins
-  version: 2024.12.0+17.gf47cb6d
+  version: 2024.12.0+18.g8b45123
 - conda: https://conda.anaconda.org/conda-forge/noarch/smirnoff99frosst-1.1.0.1-pyhd8ed1ab_0.conda
   sha256: 9dc4355abdda5e2a224e24382e99b45545f66fc6a6855c72d24a36381e9601c8
   md5: f6666fc111b7d781b4ab5cd83175458e
@@ -12502,9 +12502,9 @@ packages:
   purls: []
   size: 85189
   timestamp: 1753484064210
-- pypi: git+https://github.com/openforcefield/yammbs?rev=39f8200851979afde2c786656b544fe40d31cdf9#39f8200851979afde2c786656b544fe40d31cdf9
+- pypi: git+https://github.com/fjclark/yammbs?rev=b89f9798db32e08049840035d937cba0375c38eb#b89f9798db32e08049840035d937cba0375c38eb
   name: yammbs
-  version: 0.3.2.dev40+g39f820085
+  version: 0.0.1.dev472+gb89f9798d
   requires_python: '>=3.11'
 - conda: https://conda.anaconda.org/conda-forge/linux-64/yarl-1.22.0-py312h8a5da7c_0.conda
   sha256: 6e3f2db09387fc982b5400b842745084825cd2d4621e8278e4af8fb0dc2b55d8
