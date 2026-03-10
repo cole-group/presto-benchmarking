@@ -8,6 +8,15 @@ configfile: "workflow_config.yaml"
 RANDOM_SEED = config["random_seed"]
 TNET_500_FRAC_TEST = config["tnet500_frac_test"]
 
+QCA_DATASET_NAMES = {
+    "jacs_fragments": "OpenFF-benchmark-ligand-fragments-v2.0",
+    "1mer_backbone": "OpenFF Protein Dipeptide 2-D TorsionDrive v2.0",
+    "3mer_backbone": "OpenFF Protein Capped 3-mer Backbones v1.0",
+    "1mer_side_chain": "OpenFF Protein Dipeptide Sidechain TorsionDrive v1.0",
+}
+
+PROTEIN_DATASETS = ["1mer_backbone", "3mer_backbone", "1mer_side_chain"]
+
 ############ Convenience Functions #############
 
 def smiles_dir_outputs(
@@ -51,6 +60,7 @@ def qca_exclude_smiles_opts(dataset_name: str) -> str:
     """Return --exclude-smiles CLI flags for a QCA dataset, from workflow_config.yaml."""
     smiles = config.get("exclude_smiles", {}).get(dataset_name, [])
     return " ".join(f"--exclude-smiles '{s}'" for s in smiles)
+
 
 
 def yammbs_target_config(wildcards: Any) -> dict[str, Any]:
@@ -202,14 +212,17 @@ rule analyse_tnet500_validation_ablations:
 
 ############ JACS Fragments #############
 
-rule get_jacs_fragments_input:
+rule get_qca_torsion_input_dataset:
     output:
-        "benchmarking/jacs_fragments/input/jacs_fragments.json"
+        "benchmarking/{dataset}/input/{dataset}.json"
+    wildcard_constraints:
+        dataset="|".join(QCA_DATASET_NAMES.keys()),
     params:
-        exclude_opts=lambda wc: qca_exclude_smiles_opts("OpenFF-benchmark-ligand-fragments-v2.0"),
+        qca_dataset_name=lambda wc: QCA_DATASET_NAMES[wc.dataset],
+        exclude_opts=lambda wc: qca_exclude_smiles_opts(QCA_DATASET_NAMES[wc.dataset]),
     shell:
         "pixi run -e default presto-benchmark get-qca-torsion-input "
-        "'OpenFF-benchmark-ligand-fragments-v2.0' {output[0]} {params.exclude_opts}"
+        "'{params.qca_dataset_name}' {output[0]} {params.exclude_opts}"
 
 
 
@@ -217,40 +230,17 @@ rule get_jacs_fragments_input:
 
 ############ Proteins #############
 
-rule get_1mer_backbone_input:
-    output:
-        "benchmarking/1mer_backbone/input/1mer_backbone.json"
-    params:
-        exclude_opts=lambda wc: qca_exclude_smiles_opts("OpenFF Protein Dipeptide 2-D TorsionDrive v2.0"),
-    shell:
-        "pixi run -e default presto-benchmark get-qca-torsion-input "
-        "'OpenFF Protein Dipeptide 2-D TorsionDrive v2.0' {output[0]} {params.exclude_opts}"
-
-rule get_3mer_backbone_input:
-    output:
-        "benchmarking/3mer_backbone/input/3mer_backbone.json"
-    params:
-        exclude_opts=lambda wc: qca_exclude_smiles_opts("OpenFF Protein Capped 3-mer Backbones v1.0"),
-    shell:
-        "pixi run -e default presto-benchmark get-qca-torsion-input "
-        "'OpenFF Protein Capped 3-mer Backbones v1.0' {output[0]} {params.exclude_opts}"
-
-rule get_1mer_sidechain_input:
-    output:
-        "benchmarking/1mer_side_chain/input/1mer_side_chain.json"
-    params:
-        exclude_opts=lambda wc: qca_exclude_smiles_opts("OpenFF Protein Dipeptide Sidechain TorsionDrive v1.0"),
-    shell:
-        "pixi run -e default presto-benchmark get-qca-torsion-input "
-        "'OpenFF Protein Dipeptide Sidechain TorsionDrive v1.0' {output[0]} {params.exclude_opts}"
-
 rule get_qca_input_for_protein_torsions:
     output:
         qca_data_json="benchmarking/{dataset}/input/qca_data.json",
         qca_names_json="benchmarking/{dataset}/input/qca_names.json",
+    wildcard_constraints:
+        dataset="|".join(PROTEIN_DATASETS),
+    params:
+        qca_dataset_name=lambda wc: QCA_DATASET_NAMES[wc.dataset],
     shell:
         "pixi run -e default presto-benchmark get-qca-input-proteins "
-        "'OpenFF Protein Dipeptide 2-D TorsionDrive v2.0' "
+        "'{params.qca_dataset_name}' "
         "{output.qca_data_json} {output.qca_names_json}"
 
 rule run_protein_torsion_minimisation:
@@ -258,7 +248,7 @@ rule run_protein_torsion_minimisation:
         qca_data_json="benchmarking/{dataset}/input/qca_data.json",
         combined_ff="benchmarking/{dataset}/output/{dataset_type}/{config_name}/combined_force_field.offxml",
     output:
-        protected(directory("benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/minimised")),
+        directory("benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/minimised"),
     params:
         ff_config=config["protein_force_fields"],
     run:
