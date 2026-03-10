@@ -178,6 +178,9 @@ def plot_protein_torsion_cli(
         None, help="Figure height in inches (default: 0.6 * width)"
     ),
     font_size: Optional[int] = typer.Option(None, help="Font size in points"),
+    temperature: float = typer.Option(
+        310, help="Temperature in Kelvin for Boltzmann weighting"
+    ),
 ) -> None:
     """Generate validation plots for protein torsion benchmarking."""
     from convenience_functions.protein_2d_torsions import plot_protein_torsion
@@ -191,6 +194,7 @@ def plot_protein_torsion_cli(
         figure_width=figure_width,
         figure_height=figure_height,
         font_size=font_size,
+        temperature=temperature,
     )
 
 

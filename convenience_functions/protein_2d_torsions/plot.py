@@ -14,6 +14,7 @@ import pandas as pd
 import seaborn
 from matplotlib import pyplot
 from openmm import unit
+from scipy.spatial.distance import jensenshannon
 
 
 def compute_profile_rmse(
@@ -98,10 +99,16 @@ def plot_profile(
     pyplot.xlabel(x_label)
     pyplot.ylabel(y_label)
 
-    if legend:
-        figure.legend(loc="outside upper center", ncol=3)
-
     figure.tight_layout()
+
+    if legend:
+        figure.legend(
+            loc="lower center",
+            ncol=3,
+            bbox_to_anchor=(0.5, 1.0),
+            bbox_transform=figure.transFigure,
+        )
+
     pyplot.savefig(output_path, bbox_inches="tight")
     pyplot.close(figure)
 
@@ -216,6 +223,8 @@ def plot_energy(
 
     if energy_type == "QM Energy":
         energy_label = f"{record_name}\n{energy_type} (kcal mol$^{{-1}}$)"
+    elif energy_type == "MM RMSD":
+        energy_label = f"{ff_label} {record_name}\n{energy_type} (Å)"
     else:
         energy_label = f"{ff_label} {record_name}\n{energy_type} (kcal mol$^{{-1}}$)"
 
@@ -504,9 +513,14 @@ def plot_rmse(
     )
     pyplot.ylim(bottom=0)
     pyplot.ylabel(y_label)
-    figure.legend(loc="outside upper center", ncol=2)
-
     figure.tight_layout()
+    figure.legend(
+        loc="lower center",
+        ncol=2,
+        bbox_to_anchor=(0.5, 1.0),
+        bbox_transform=figure.transFigure,
+    )
+
     pyplot.savefig(output_path, bbox_inches="tight")
     pyplot.close(figure)
 
@@ -716,6 +730,84 @@ def plot_projection(
     )
 
 
+def plot_rmsd_projection(
+    record_name: str,
+    rmsd_df: pd.DataFrame,
+    output_dir: Path | str,
+    figure_size: Tuple[float, float],
+    projection_label: str,
+    projection_index: Optional[str] = None,
+    angle_interval: int = 60,
+    temperature: float = 310,
+    color_offset: int = 0,
+) -> None:
+    """Plot Boltzmann-weighted RMSD projection onto one dihedral or 1D RMSD.
+
+    For 2D records, projects MM RMSD onto one dihedral axis weighted by QM
+    Boltzmann factors. For 1D records, plots RMSD directly.
+
+    Parameters
+    ----------
+    record_name : str
+        Record name
+    rmsd_df : pd.DataFrame
+        DataFrame with columns X, (Y for 2D), QM Energy, and one column per
+        force field containing MM RMSD values (in Å)
+    output_dir : Path or str
+        Output directory
+    figure_size : tuple
+        Figure size
+    projection_label : str
+        Label for the projection axis
+    projection_index : str, optional
+        Index to project onto ('X' or 'Y')
+    angle_interval : int, optional
+        Angle tick interval (default: 60)
+    temperature : float, optional
+        Temperature in Kelvin for Boltzmann weighting (default: 310)
+    """
+    R = unit.MOLAR_GAS_CONSTANT_R.value_in_unit(unit.kilocalorie_per_mole / unit.kelvin)
+    beta = 1.0 / (R * temperature)
+
+    output_path = Path(output_dir, f"{record_name}-{projection_label.lower()}-rmsd.pdf")
+    x_label = f'{record_name.replace("-rotamer-1", "")} {projection_label} (deg)'
+
+    ff_labels = [col for col in rmsd_df.columns if col not in ("X", "Y", "QM Energy")]
+    colors = seaborn.color_palette()[color_offset : color_offset + len(ff_labels)]
+
+    if "Y" in rmsd_df.columns:
+        rmsd_label = "Boltzmann-weighted RMSD (Å)"
+        weights = np.exp(-beta * rmsd_df["QM Energy"])
+        sum_weights = weights.groupby(rmsd_df[projection_index]).sum()
+        plot_data = pd.DataFrame(index=sum_weights.index)
+        for ff_label in ff_labels:
+            weighted_sum = (
+                (rmsd_df[ff_label] * weights).groupby(rmsd_df[projection_index]).sum()
+            )
+            plot_data[ff_label] = weighted_sum / sum_weights
+    else:
+        rmsd_label = "RMSD (Å)"
+        plot_data = rmsd_df.set_index("X")[ff_labels].sort_index()
+
+    figure = pyplot.figure(figsize=figure_size)
+    for ff_label, color in zip(plot_data.columns, colors):
+        pyplot.plot(plot_data[ff_label], label=ff_label, color=color)
+    pyplot.xlim(-180, 180)
+    pyplot.xticks(np.arange(-180, 181, angle_interval))
+    pyplot.ylim(bottom=0)
+    pyplot.xlabel(x_label)
+    pyplot.ylabel(rmsd_label)
+    figure.tight_layout()
+    figure.legend(
+        loc="lower center",
+        ncol=3,
+        bbox_to_anchor=(0.5, 1.0),
+        bbox_transform=figure.transFigure,
+    )
+    pyplot.savefig(output_path, bbox_inches="tight")
+    pyplot.close(figure)
+
+
 def plot_protein_torsion(
     input_dir: str | Path,
     output_dir: str | Path,
@@ -725,6 +817,7 @@ def plot_protein_torsion(
     figure_width: float = 6.0,
     figure_height: Optional[float] = None,
     font_size: Optional[int] = None,
+    temperature: float = 310,
 ) -> None:
     """Generate validation plots for protein torsion benchmarking.
 
@@ -748,6 +841,8 @@ def plot_protein_torsion(
         Figure height in inches (None = 0.75 * width)
     font_size : int, optional
         Font size in points (None = matplotlib default)
+    temperature : float, optional
+        Temperature in Kelvin for Boltzmann weighting (default: 310)
     """
     input_dir = Path(input_dir)
     output_dir = Path(output_dir)
@@ -793,6 +888,9 @@ def plot_protein_torsion(
     qc_data: Dict[str, DefaultDict[str, Dict[str, Any]]] = {}
     rmse_values: Dict[str, Dict[str, float]] = {}
     norm_rmse_values: Dict[str, Dict[str, float]] = {}
+    weighted_mean_rmsd_values: Dict[str, Dict[str, float]] = {}
+    rms_rmsd_values: Dict[str, Dict[str, float]] = {}
+    js_distance_values: Dict[str, Dict[str, float]] = {}
 
     # Load data from all force fields
     for result_file in result_files:
@@ -801,6 +899,9 @@ def plot_protein_torsion(
         qc_data[ff_label] = defaultdict(dict)
         rmse_values[ff_label] = {}
         norm_rmse_values[ff_label] = {}
+        weighted_mean_rmsd_values[ff_label] = {}
+        rms_rmsd_values[ff_label] = {}
+        js_distance_values[ff_label] = {}
 
         with open(result_file) as f:
             qc_data_by_id = json.load(f)
@@ -825,7 +926,8 @@ def plot_protein_torsion(
                             "QM Energy": record_energies[grid_id][0],
                             "MM Energy": record_energies[grid_id][1],
                             "MM Target": record_energies[grid_id][2],
-                            "MM RMSD": record_energies[grid_id][3],
+                            "MM RMSD": record_energies[grid_id][3]
+                            * 10,  # Convert from nm to Å
                         }
                         for grid_id in record_energies
                     ]
@@ -839,7 +941,8 @@ def plot_protein_torsion(
                             "QM Energy": record_energies[grid_id][0],
                             "MM Energy": record_energies[grid_id][1],
                             "MM Target": record_energies[grid_id][2],
-                            "MM RMSD": record_energies[grid_id][3],
+                            "MM RMSD": record_energies[grid_id][3]
+                            * 10,  # Convert from nm to Å
                         }
                         for grid_id in record_energies
                     ]
@@ -869,7 +972,7 @@ def plot_protein_torsion(
                 y_label = "Chi2 (deg)"
 
             # Plot torsion profiles for this record
-            for energy_type in ["QM Energy", "MM Energy", "MM Target"]:
+            for energy_type in ["QM Energy", "MM Energy", "MM Target", "MM RMSD"]:
                 plot_energy(
                     record_name,
                     energy_type,
@@ -904,12 +1007,33 @@ def plot_protein_torsion(
             rmse_values[ff_label][rmse_index] = rmse
             norm_rmse_values[ff_label][rmse_index] = norm_rmse
 
+            # Compute Boltzmann-weighted mean RMSD and RMS RMSD over the grid,
+            # and Jensen-Shannon distance between QM and MM Boltzmann distributions
+            _R = unit.MOLAR_GAS_CONSTANT_R.value_in_unit(
+                unit.kilocalorie_per_mole / unit.kelvin
+            )
+            _beta = 1.0 / (_R * temperature)
+            _qm_weights = np.exp(-_beta * energy_df["QM Energy"].values)
+            _qm_weights /= _qm_weights.sum()
+            _mm_weights = np.exp(-_beta * energy_df["MM Energy"].values)
+            _mm_weights /= _mm_weights.sum()
+            _rmsd_values = energy_df["MM RMSD"].values
+            weighted_mean_rmsd_values[ff_label][rmse_index] = float(
+                np.sum(_qm_weights * _rmsd_values)
+            )
+            rms_rmsd_values[ff_label][rmse_index] = float(
+                np.sqrt(np.mean(_rmsd_values**2))
+            )
+            js_distance_values[ff_label][rmse_index] = float(
+                jensenshannon(_qm_weights, _mm_weights, base=2)
+            )
+
     # Plot QM-MM RMSEs for each validation target by force field
     plot_rmse(
         rmse_values,
         Path(output_dir, f"torsiondrive-target-qm-mm-rmse.{extension}"),
         figure_size,
-        "Capped 3-mer backbone\nRMSE (kcal mol$^{-1}$)",
+        "RMSE (kcal mol$^{-1}$)",
         rotate_x_labels=True,
     )
 
@@ -917,7 +1041,7 @@ def plot_protein_torsion(
         norm_rmse_values,
         Path(output_dir, f"torsiondrive-target-qm-mm-norm-rmse.{extension}"),
         figure_size,
-        "Capped 3-mer backbone\nNormalized RMSE",
+        "Normalized RMSE",
         rotate_x_labels=True,
     )
 
@@ -926,7 +1050,7 @@ def plot_protein_torsion(
         rmse_values,
         Path(output_dir, f"force-field-qm-mm-rmse.{extension}"),
         figure_size,
-        "Capped 3-mer backbone\nRMSE (kcal mol$^{-1}$)",
+        "RMSE (kcal mol$^{-1}$)",
         dark_background=dark_background,
         rotate_x_labels=True,
     )
@@ -935,7 +1059,61 @@ def plot_protein_torsion(
         norm_rmse_values,
         Path(output_dir, f"force-field-qm-mm-norm-rmse.{extension}"),
         figure_size,
-        "Capped 3-mer backbone\nNormalized RMSE",
+        "Normalized RMSE",
+        dark_background=dark_background,
+        rotate_x_labels=True,
+    )
+
+    # Plot Boltzmann-weighted mean RMSD summary plots
+    plot_rmse(
+        weighted_mean_rmsd_values,
+        Path(output_dir, f"torsiondrive-target-boltzmann-mean-rmsd.{extension}"),
+        figure_size,
+        "Boltzmann-weighted mean RMSD (Å)",
+        rotate_x_labels=True,
+    )
+
+    plot_force_field_rmse(
+        weighted_mean_rmsd_values,
+        Path(output_dir, f"force-field-boltzmann-mean-rmsd.{extension}"),
+        figure_size,
+        "Boltzmann-weighted mean RMSD (Å)",
+        dark_background=dark_background,
+        rotate_x_labels=True,
+    )
+
+    # Plot RMS RMSD summary plots
+    plot_rmse(
+        rms_rmsd_values,
+        Path(output_dir, f"torsiondrive-target-rms-rmsd.{extension}"),
+        figure_size,
+        "RMS RMSD (Å)",
+        rotate_x_labels=True,
+    )
+
+    plot_force_field_rmse(
+        rms_rmsd_values,
+        Path(output_dir, f"force-field-rms-rmsd.{extension}"),
+        figure_size,
+        "RMS RMSD (Å)",
+        dark_background=dark_background,
+        rotate_x_labels=True,
+    )
+
+    # Plot Jensen-Shannon distance summary plots
+    plot_rmse(
+        js_distance_values,
+        Path(output_dir, f"torsiondrive-target-js-distance.{extension}"),
+        figure_size,
+        "Jensen-Shannon distance",
+        rotate_x_labels=True,
+    )
+
+    plot_force_field_rmse(
+        js_distance_values,
+        Path(output_dir, f"force-field-js-distance.{extension}"),
+        figure_size,
+        "Jensen-Shannon distance",
         dark_background=dark_background,
         rotate_x_labels=True,
     )
@@ -974,6 +1152,23 @@ def plot_protein_torsion(
                 )
                 energy_df = pd.merge(energy_df, energy_df_2, on=merge_columns)
 
+            # Build RMSD DataFrame for Boltzmann-weighted RMSD projections
+            if "Y" in energy_df.columns:
+                rmsd_select_columns = ["X", "Y", "QM Energy", "MM RMSD"]
+                rmsd_merge_columns = ["X", "Y", "QM Energy"]
+            else:
+                rmsd_select_columns = ["X", "QM Energy", "MM RMSD"]
+                rmsd_merge_columns = ["X", "QM Energy"]
+
+            rmsd_df = qc_data[ff_labels[0]][record_name]["energies"][
+                rmsd_select_columns
+            ].rename(columns={"MM RMSD": ff_labels[0]})
+            for ff_label in ff_labels[1:]:
+                rmsd_df_ff = qc_data[ff_label][record_name]["energies"][
+                    rmsd_select_columns
+                ].rename(columns={"MM RMSD": ff_label})
+                rmsd_df = pd.merge(rmsd_df, rmsd_df_ff, on=rmsd_merge_columns)
+
             # Generate projection plots based on record type
             if "rotamer" in record_name:
                 plot_projection(
@@ -983,6 +1178,7 @@ def plot_protein_torsion(
                     figure_size=figure_size,
                     projection_label="Phi",
                     projection_index="X",
+                    temperature=temperature,
                 )
 
                 plot_projection(
@@ -992,6 +1188,29 @@ def plot_protein_torsion(
                     figure_size=figure_size,
                     projection_label="Psi",
                     projection_index="Y",
+                    temperature=temperature,
+                )
+
+                plot_rmsd_projection(
+                    record_name=record_name,
+                    rmsd_df=rmsd_df,
+                    output_dir=output_dir,
+                    figure_size=figure_size,
+                    projection_label="Phi",
+                    projection_index="X",
+                    color_offset=1,
+                    temperature=temperature,
+                )
+
+                plot_rmsd_projection(
+                    record_name=record_name,
+                    rmsd_df=rmsd_df,
+                    output_dir=output_dir,
+                    figure_size=figure_size,
+                    projection_label="Psi",
+                    projection_index="Y",
+                    color_offset=1,
+                    temperature=temperature,
                 )
             else:
                 plot_projection(
@@ -1001,6 +1220,18 @@ def plot_protein_torsion(
                     figure_size=figure_size,
                     projection_label="Chi1",
                     projection_index="X",
+                    temperature=temperature,
+                )
+
+                plot_rmsd_projection(
+                    record_name=record_name,
+                    rmsd_df=rmsd_df,
+                    output_dir=output_dir,
+                    figure_size=figure_size,
+                    projection_label="Chi1",
+                    projection_index="X",
+                    color_offset=1,
+                    temperature=temperature,
                 )
 
                 if "Y" in energy_df.columns:
@@ -1011,4 +1242,16 @@ def plot_protein_torsion(
                         figure_size=figure_size,
                         projection_label="Chi2",
                         projection_index="Y",
+                        temperature=temperature,
+                    )
+
+                    plot_rmsd_projection(
+                        record_name=record_name,
+                        rmsd_df=rmsd_df,
+                        output_dir=output_dir,
+                        figure_size=figure_size,
+                        projection_label="Chi2",
+                        projection_index="Y",
+                        color_offset=1,
+                        temperature=temperature,
                     )
