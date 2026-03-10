@@ -441,10 +441,16 @@ def plot_difference(
 
     # Compute RMSE and normalized RMSE
     rmse = compute_profile_rmse(
-        energy_series_1.values, energy_series_2.values, normalize=False, shift=True
+        energy_series_1.values,
+        energy_series_2.values,
+        normalize=False,
+        shift=True,
     )
     norm_rmse = compute_profile_rmse(
-        energy_series_1.values, energy_series_2.values, normalize=True, shift=True
+        energy_series_1.values,
+        energy_series_2.values,
+        normalize=True,
+        shift=True,
     )
 
     return rmse, norm_rmse
@@ -673,6 +679,7 @@ def plot_projection(
         ).sum()
         pmf = -np.log(projection_partition_function) / beta
         plot_data = pmf.set_index(projection_index)
+        plot_data = plot_data - plot_data.min()
 
     else:
         energy_label = "Energy (kcal mol$^{{-1}}$)"
