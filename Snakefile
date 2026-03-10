@@ -264,7 +264,7 @@ rule run_protein_torsion_minimisation:
             config_path = f.name
         
         shell(
-            f"pixi run -e espaloma presto-benchmark minimise-protein-torsion-multi "
+            f"pixi run -e default presto-benchmark minimise-protein-torsion-multi "
             f"{input.qca_data_json} {output[0]} --config {config_path}"
         )
 

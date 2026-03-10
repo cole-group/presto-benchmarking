@@ -171,11 +171,11 @@ def plot_protein_torsion_cli(
     names_file: Optional[Path] = typer.Option(
         None, help="Path to JSON file mapping IDs to human-readable names"
     ),
-    dark_background: bool = typer.Option(True, help="Use dark background style"),
+    dark_background: bool = typer.Option(False, help="Use dark background style"),
     extension: str = typer.Option("pdf", help="Output file extension"),
-    figure_width: float = typer.Option(4.25, help="Figure width in inches"),
+    figure_width: float = typer.Option(6, help="Figure width in inches"),
     figure_height: Optional[float] = typer.Option(
-        None, help="Figure height in inches (default: 0.75 * width)"
+        None, help="Figure height in inches (default: 0.6 * width)"
     ),
     font_size: Optional[int] = typer.Option(None, help="Font size in points"),
 ) -> None:

@@ -16,6 +16,7 @@ from openff.qcsubmit.results import TorsionDriveResultCollection
 from openff.toolkit import ForceField, Molecule, ToolkitRegistry, RDKitToolkitWrapper
 from openff.toolkit.utils import toolkit_registry_manager
 from openff.toolkit.utils.nagl_wrapper import NAGLToolkitWrapper
+from openff.units import unit as off_unit
 from openff.units import unit as offunit
 from openmm import app, unit
 from openmm.app import ForceField as OMMForceField
@@ -23,6 +24,7 @@ from openmmforcefields.generators import (
     GAFFTemplateGenerator,
     EspalomaTemplateGenerator,
 )
+from openmmml import MLPotential
 from qcportal.torsiondrive import TorsiondriveRecord
 from rdkit.Chem import rdMolAlign
 from rdkit.Geometry import Point3D
@@ -31,7 +33,7 @@ from tqdm import tqdm
 
 def _parameterize_molecule(
     mapped_smiles: str,
-    force_field: ForceField | OMMForceField,
+    force_field: ForceField | OMMForceField | MLPotential,
     force_field_type: str,
 ) -> openmm.System:
     """Parameterize a particular molecules with a specified force field."""
@@ -82,15 +84,24 @@ def _parameterize_molecule(
             constraints=None,
         )
 
+    elif force_field_type.lower() == "aceff20":
+        omm_top = offmol.to_topology().to_openmm()
+        charge = offmol.total_charge.m_as(off_unit.e)
+        return force_field.createSystem(omm_top, charge=charge)
+
     raise NotImplementedError(
         "Only SMIRNOFF, Amber, GAFF, and espaloma force fields are currently supported."
     )
 
 
-def _evaluate_energy(openmm_system: openmm.System, coordinates: unit.Quantity) -> float:
+def _evaluate_energy(
+    openmm_system: openmm.System,
+    coordinates: unit.Quantity,
+    platform_name: str = "Reference",
+) -> float:
     """Evaluate the potential energy of a conformer in kcal/mol."""
     integrator = openmm.VerletIntegrator(0.001 * unit.femtoseconds)
-    platform = openmm.Platform.getPlatformByName("Reference")
+    platform = openmm.Platform.getPlatformByName(platform_name)
     openmm_context = openmm.Context(openmm_system, integrator, platform)
 
     openmm_context.setPositions(coordinates.value_in_unit(unit.nanometers))
@@ -180,21 +191,24 @@ def _compute_grid_energies(
     # Zero out the contribution of the driven torsion to evaluate a target for
     # a Fourier series
     target_system = copy.deepcopy(openmm_system)
-    torsion_force = [
+    torsion_forces = [
         force
         for force in target_system.getForces()
         if isinstance(force, openmm.PeriodicTorsionForce)
-    ][0]
+    ]
 
-    for torsion_index in range(torsion_force.getNumTorsions()):
-        i, j, k, l, periodicity, phase, _ = torsion_force.getTorsionParameters(
-            torsion_index
-        )
+    if torsion_forces:
+        torsion_force = torsion_forces[0]
 
-        if ((i, j, k, l) if k >= j else (l, k, j, i)) in dihedral_indices:
-            torsion_force.setTorsionParameters(
-                torsion_index, i, j, k, l, periodicity, phase, 0.0
+        for torsion_index in range(torsion_force.getNumTorsions()):
+            i, j, k, l, periodicity, phase, _ = torsion_force.getTorsionParameters(
+                torsion_index
             )
+
+            if ((i, j, k, l) if k >= j else (l, k, j, i)) in dihedral_indices:
+                torsion_force.setTorsionParameters(
+                    torsion_index, i, j, k, l, periodicity, phase, 0.0
+                )
 
     # Evaluate the energy for each grid id
     energies: Dict[Tuple[int, ...], Tuple[float, float, float, float]] = dict()
@@ -211,8 +225,14 @@ def _compute_grid_energies(
             grid_energies[grid_id] * unit.hartree * unit.AVOGADRO_CONSTANT_NA
         ).value_in_unit(unit.kilocalories_per_mole)
 
-        mm_energy = _evaluate_energy(openmm_system, coordinates)
-        mm_target = _evaluate_energy(target_system, coordinates)
+        platform_name = "Reference" if force_field_type != "aceff20" else "CUDA"
+
+        mm_energy = _evaluate_energy(
+            openmm_system, coordinates, platform_name=platform_name
+        )
+        mm_target = _evaluate_energy(
+            target_system, coordinates, platform_name=platform_name
+        )
 
         # Get RMSD between MM and QM coordinates from RDKit
         ref_coords = grid_conformers[grid_id].m_as(offunit.nanometer)
@@ -270,7 +290,7 @@ def minimise_protein_torsion(
         Label for the force field (used for identification)
     force_field_type : str
         Type of force field: 'smirnoff', 'smirnoff-nagl', 'smirnoff-am1bcc',
-        'amber', 'gaff', or 'espaloma'
+        'amber', 'gaff', 'aceff20', or 'espaloma'
     output_path : str or Path
         Path where the output JSON will be written
     """
@@ -311,10 +331,13 @@ def minimise_protein_torsion(
         )
         force_field.registerTemplateGenerator(espaloma.generator)
 
+    elif force_field_type == "aceff20":
+        force_field = MLPotential("aceff-2.0")
+
     else:
         raise NotImplementedError(
             'force_field_type must be one of: "smirnoff", "smirnoff-nagl", '
-            '"smirnoff-am1bcc", "amber", "gaff", or "espaloma"'
+            '"smirnoff-am1bcc", "amber", "gaff", "aceff20", or "espaloma"'
         )
 
     qc_data: DefaultDict[str, Any] = defaultdict(dict)

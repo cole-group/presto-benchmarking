@@ -101,7 +101,8 @@ def plot_profile(
     if legend:
         figure.legend(loc="outside upper center", ncol=3)
 
-    pyplot.savefig(output_path)
+    figure.tight_layout()
+    pyplot.savefig(output_path, bbox_inches="tight")
     pyplot.close(figure)
 
 
@@ -163,7 +164,8 @@ def plot_heatmap(
         ticks=np.arange(colorbar_range[0], colorbar_range[1] + 1, colorbar_interval),
     )
 
-    pyplot.savefig(output_path)
+    figure.tight_layout()
+    pyplot.savefig(output_path, bbox_inches="tight")
     pyplot.close(figure)
 
 
@@ -504,7 +506,8 @@ def plot_rmse(
     pyplot.ylabel(y_label)
     figure.legend(loc="outside upper center", ncol=2)
 
-    pyplot.savefig(output_path)
+    figure.tight_layout()
+    pyplot.savefig(output_path, bbox_inches="tight")
     pyplot.close(figure)
 
 
@@ -620,7 +623,7 @@ def plot_force_field_rmse(
     # Set tight layout to prevent clipping of error bars and labels
     figure.tight_layout()
 
-    pyplot.savefig(output_path)
+    pyplot.savefig(output_path, bbox_inches="tight")
     pyplot.close(figure)
 
 
@@ -717,9 +720,9 @@ def plot_protein_torsion(
     input_dir: str | Path,
     output_dir: str | Path,
     names_file: Optional[str | Path] = None,
-    dark_background: bool = True,
+    dark_background: bool = False,
     extension: str = "pdf",
-    figure_width: float = 4.25,
+    figure_width: float = 6.0,
     figure_height: Optional[float] = None,
     font_size: Optional[int] = None,
 ) -> None:
@@ -760,7 +763,7 @@ def plot_protein_torsion(
     )
 
     if figure_height is None:
-        figure_size = (figure_width, figure_width * 0.75)
+        figure_size = (figure_width, figure_width * 0.6)
     else:
         figure_size = (figure_width, figure_height)
 

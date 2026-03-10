@@ -15,6 +15,9 @@ tnet500_frac_test: 0.8  # 20% validation, 80% test
 
 # Protein force field configurations for benchmarking
 protein_force_fields:
+  "AceFF_2.0":
+    ff_path: "dummy_ff.xml"
+    ff_type: "aceff20"
   "Sage_230":
     ff_path: "input_ff/openff_unconstrained-2.3.0.offxml"
     ff_type: "smirnoff-nagl"
@@ -27,9 +30,9 @@ protein_force_fields:
   ff19SB:
     ff_path: "input_ff/protein.ff19SB.xml"
     ff_type: "amber"
-  espaloma:
-    ff_path: "dummy_ff.xml"
-    ff_type: "espaloma"
+  # espaloma:
+  #   ff_path: "dummy_ff.xml"
+  #   ff_type: "espaloma"
 
 # yammbs torsion scan analysis configuration
 yammbs_analysis:
