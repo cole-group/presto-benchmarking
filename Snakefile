@@ -12,7 +12,7 @@ QCA_DATASET_NAMES = {
     "jacs_fragments": "OpenFF-benchmark-ligand-fragments-v2.0",
     "1mer_backbone": "OpenFF Protein Dipeptide 2-D TorsionDrive v2.0",
     "3mer_backbone": "OpenFF Protein Capped 3-mer Backbones v1.0",
-    "1mer_side_chain": "OpenFF Protein Dipeptide Sidechain TorsionDrive v1.0",
+    "1mer_side_chain": "OpenFF Protein Capped 1-mer Sidechains v1.3",
 }
 
 PROTEIN_DATASETS = ["1mer_backbone", "3mer_backbone", "1mer_side_chain"]
@@ -163,7 +163,7 @@ rule analyse_torsion_scans_yammbs:
         ),
     shell:
         "pixi run -e default presto-benchmark analyse-torsion-scans "
-        #"--n-processes 7 "
+        "--n-processes 7 "
         "{input.qca_data_json} {input.combined_ff} {params.analysis_dir} "
         "{params.base_ff_opts} {params.extra_ff_opts}"
 
@@ -263,6 +263,8 @@ rule run_protein_torsion_minimisation:
         combined_ff=protein_torsion_combined_ff,
     output:
         directory("benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/minimised"),
+    wildcard_constraints:
+        dataset="|".join(PROTEIN_DATASETS),
     params:
         ff_config=config["protein_force_fields"],
     run:
@@ -278,7 +280,7 @@ rule run_protein_torsion_minimisation:
             config_path = f.name
         
         shell(
-            f"pixi run -e default presto-benchmark minimise-protein-torsion-multi "
+            f"pixi run -e espaloma presto-benchmark minimise-protein-torsion-multi "
             f"{input.qca_data_json} {output[0]} --config {config_path}"
         )
 
@@ -288,6 +290,8 @@ rule plot_protein_torsion_analysis:
         qca_names_json="benchmarking/{dataset}/input/qca_names.json",
     output:
         directory("benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/plots"),
+    wildcard_constraints:
+        dataset="|".join(PROTEIN_DATASETS),
     shell:
         "pixi run -e default presto-benchmark plot-protein-torsion {input.minimised_dir} {output[0]} "
         "--names-file {input.qca_names_json}"
