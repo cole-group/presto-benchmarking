@@ -67,6 +67,20 @@ def yammbs_target_config(wildcards: Any) -> dict[str, Any]:
     """Return yammbs config for a dataset/split target."""
     return config["yammbs_analysis"]["targets"][wildcards.dataset][wildcards.dataset_type]
 
+
+def protein_torsion_combined_ff(wildcards: Any) -> str:
+    """Return path to the combined force field for protein torsion minimisation.
+
+    1mer_side_chain reuses the combined force field produced by 1mer_backbone fits.
+    """
+    source_dataset = (
+        "1mer_backbone" if wildcards.dataset == "1mer_side_chain" else wildcards.dataset
+    )
+    return (
+        f"benchmarking/{source_dataset}/output/"
+        f"{wildcards.dataset_type}/{wildcards.config_name}/combined_force_field.offxml"
+    )
+
 ############ Workflow Rules #############
 
 
@@ -246,7 +260,7 @@ rule get_qca_input_for_protein_torsions:
 rule run_protein_torsion_minimisation:
     input:
         qca_data_json="benchmarking/{dataset}/input/qca_data.json",
-        combined_ff="benchmarking/{dataset}/output/{dataset_type}/{config_name}/combined_force_field.offxml",
+        combined_ff=protein_torsion_combined_ff,
     output:
         directory("benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/minimised"),
     params:
