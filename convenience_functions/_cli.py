@@ -115,6 +115,10 @@ def minimise_protein_torsion_cli(
         ..., help="Type of force field (e.g., smirnoff-nagl, amber)"
     ),
     output_path: Path = typer.Argument(..., help="Path for output results JSON file"),
+    dihedral_protocol: str = typer.Option(
+        "restrain",
+        help="Dihedral protocol: 'restrain' (strong torsion restraints, default) or 'freeze' (zero atom masses)",
+    ),
 ) -> None:
     """Minimize protein torsion geometries with specified force field."""
     from convenience_functions.protein_2d_torsions import minimise_protein_torsion
@@ -125,6 +129,7 @@ def minimise_protein_torsion_cli(
         force_field_label=force_field_label,
         force_field_type=force_field_type,
         output_path=output_path,
+        dihedral_protocol=dihedral_protocol,
     )
 
 
@@ -138,6 +143,10 @@ def minimise_protein_torsion_multi_cli(
         ...,
         "--config",
         help="Path to JSON file with force field configurations",
+    ),
+    dihedral_protocol: str = typer.Option(
+        "restrain",
+        help="Dihedral protocol: 'restrain' (strong torsion restraints, default) or 'freeze' (zero atom masses)",
     ),
 ) -> None:
     """Minimize protein torsions with multiple force fields from config."""
@@ -159,6 +168,7 @@ def minimise_protein_torsion_multi_cli(
             force_field_label=ff_label,
             force_field_type=args["ff_type"],
             output_path=output_dir / f"{ff_label}.json",
+            dihedral_protocol=dihedral_protocol,
         )
 
 
