@@ -82,6 +82,40 @@ def get_tnet500_input_cli(
     get_tnet_500_spice_lot_qca_input(json_output_path=json_output_path)
 
 
+@app.command("get-folmsbee-input")
+def get_folmsbee_input_cli(
+    output_path: Path = typer.Argument(
+        ..., help="Directory path where conformer-benchmark will be cloned"
+    ),
+) -> None:
+    """Download Folmsbee/Hutchison conformer-benchmark input files."""
+    from convenience_functions.get_folmsbee_input import (
+        download_folmsbee_from_gh,
+    )
+
+    download_folmsbee_from_gh(path=output_path)
+
+
+@app.command("process-folmsbee-smiles")
+def process_folmsbee_smiles_cli(
+    molecules_smi: Path = typer.Argument(
+        ..., help="Path to Folmsbee molecules.smi file"
+    ),
+    output_dir: Path = typer.Argument(
+        ..., help="Directory to write per-molecule .smi files"
+    ),
+) -> None:
+    """Convert Folmsbee molecules.smi to run_presto-compatible .smi files."""
+    from convenience_functions.get_folmsbee_input import (
+        write_folmsbee_smiles_files,
+    )
+
+    write_folmsbee_smiles_files(
+        molecules_smi=molecules_smi,
+        output_dir=output_dir,
+    )
+
+
 @app.command("split-qca-input")
 def split_qca_input_cli(
     input_json_path: Path = typer.Argument(..., help="Path to input QCA JSON"),

@@ -41,12 +41,16 @@ def validation_force_fields(wildcards: Any) -> list[str]:
     to split_test_only_input for datasets without a dedicated checkpoint.
     """
     dataset = wildcards.dataset
-    checkpoint_obj = getattr(checkpoints, f"split_{dataset}_input", None)
     checkpoint_kwargs: dict = {}
-    if checkpoint_obj is None:
-        # Fall back to the generic protein backbone checkpoint (wildcard on dataset)
-        checkpoint_obj = checkpoints.split_test_only_input
-        checkpoint_kwargs = {"dataset": dataset}
+    if dataset == "folmsbee_conformers":
+        checkpoint_obj = checkpoints.process_folmsbee_smiles
+    else:
+        checkpoint_obj = getattr(checkpoints, f"split_{dataset}_input", None)
+        if checkpoint_obj is None:
+            # Fall back to the generic protein backbone checkpoint (wildcard on dataset)
+            checkpoint_obj = checkpoints.split_test_only_input
+            checkpoint_kwargs = {"dataset": dataset}
+
     return smiles_dir_outputs(
         wildcards,
         checkpoint_obj=checkpoint_obj,
@@ -86,6 +90,8 @@ def protein_torsion_combined_ff(wildcards: Any) -> str:
 
 rule all:
     input:
+        # Folmsbee/Hutchison conformer benchmark input
+        "benchmarking/folmsbee_conformers/input/gh_repo",
         # TNet 500 validation force fields for different ablations
         "benchmarking/tnet500/output/validation/default/combined_force_field.offxml",
         "benchmarking/tnet500/output/validation/no_reg/combined_force_field.offxml",
@@ -166,6 +172,25 @@ rule analyse_torsion_scans_yammbs:
         "--n-processes 7 "
         "{input.qca_data_json} {input.combined_ff} {params.analysis_dir} "
         "{params.base_ff_opts} {params.extra_ff_opts}"
+
+
+############ Folmsbee Conformers #############
+
+rule get_folmsbee_conformer_input:
+    output:
+        directory("benchmarking/folmsbee_conformers/input/gh_repo"),
+    shell:
+        "pixi run -e default presto-benchmark get-folmsbee-input {output[0]}"
+
+
+checkpoint process_folmsbee_smiles:
+    input:
+        gh_repo=rules.get_folmsbee_conformer_input.output[0]
+    output:
+        directory("benchmarking/folmsbee_conformers/input/test/smiles")
+    shell:
+        "pixi run -e default presto-benchmark process-folmsbee-smiles "
+        "{input.gh_repo}/SMILES/molecules.smi {output}"
 
 
 ############ TNet 500 #############
