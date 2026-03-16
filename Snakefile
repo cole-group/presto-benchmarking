@@ -169,7 +169,6 @@ rule analyse_torsion_scans_yammbs:
         ),
     shell:
         "pixi run -e default presto-benchmark analyse-torsion-scans "
-        "--n-processes 7 "
         "{input.qca_data_json} {input.combined_ff} {params.analysis_dir} "
         "{params.base_ff_opts} {params.extra_ff_opts}"
 

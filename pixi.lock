@@ -603,10 +603,10 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/ee/8c/83087ebc47ab0396ce092363001fa37c17153119ee282700c0713a195853/prettytable-3.17.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/90/cc/bb6395c3f2b6bb739b1d3fc0e71f94e6a1c2e256df496237cbfd13cd74a6/python_hostlist-2.3.0.tar.gz
       - pypi: git+https://github.com/openforcefield/smee.git?rev=36bc8286b16ae815f13cfb10d8096ff1b9aeca0e#36bc8286b16ae815f13cfb10d8096ff1b9aeca0e
-      - pypi: git+https://github.com/fjclark/smirnoff-plugins?rev=8b45123f11498f22e29a57aeb6ac8697715f8429#8b45123f11498f22e29a57aeb6ac8697715f8429
+      - pypi: git+https://github.com/fjclark/smirnoff-plugins?rev=fd4e8e71a0a2c710d662f6001cabc802a5097cf6#fd4e8e71a0a2c710d662f6001cabc802a5097cf6
       - pypi: https://files.pythonhosted.org/packages/fb/12/5911ae3eeec47800503a238d971e51722ccea5feb8569b735184d5fcdbc0/toolz-1.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c0/f1/a47c831436595cffbfd69a19ea129a23627120b13f4886499e58775329d1/torch_ema-0.3-py3-none-any.whl
-      - pypi: git+https://github.com/fjclark/yammbs?rev=b89f9798db32e08049840035d937cba0375c38eb#b89f9798db32e08049840035d937cba0375c38eb
+      - pypi: git+https://github.com/fjclark/yammbs?rev=489da7a9efe21c493570b3c20063c7e9995dd77b#489da7a9efe21c493570b3c20063c7e9995dd77b
       - pypi: ./
   espaloma:
     channels:
@@ -9012,7 +9012,7 @@ packages:
 - pypi: ./
   name: presto-benchmark
   version: 0.1.0
-  sha256: 6a28ba5792b55403cdf6bff307ad375cd392f7428aee19a03e4466a7ff645205
+  sha256: a25e94c2637faedaf65b21b3651cacb09c56b545105683f1bafd61ea52417240
   requires_python: '>=3.12'
 - pypi: https://files.pythonhosted.org/packages/ee/8c/83087ebc47ab0396ce092363001fa37c17153119ee282700c0713a195853/prettytable-3.17.0-py3-none-any.whl
   name: prettytable
@@ -10779,9 +10779,9 @@ packages:
   name: smee
   version: 0.16.3.dev8+g36bc8286b
   requires_python: '>=3.10'
-- pypi: git+https://github.com/fjclark/smirnoff-plugins?rev=8b45123f11498f22e29a57aeb6ac8697715f8429#8b45123f11498f22e29a57aeb6ac8697715f8429
+- pypi: git+https://github.com/fjclark/smirnoff-plugins?rev=fd4e8e71a0a2c710d662f6001cabc802a5097cf6#fd4e8e71a0a2c710d662f6001cabc802a5097cf6
   name: smirnoff-plugins
-  version: 2024.12.0+18.g8b45123
+  version: 2024.12.0+19.gfd4e8e7
 - conda: https://conda.anaconda.org/conda-forge/noarch/smirnoff99frosst-1.1.0.1-pyhd8ed1ab_0.conda
   sha256: 9dc4355abdda5e2a224e24382e99b45545f66fc6a6855c72d24a36381e9601c8
   md5: f6666fc111b7d781b4ab5cd83175458e
@@ -12502,9 +12502,9 @@ packages:
   purls: []
   size: 85189
   timestamp: 1753484064210
-- pypi: git+https://github.com/fjclark/yammbs?rev=b89f9798db32e08049840035d937cba0375c38eb#b89f9798db32e08049840035d937cba0375c38eb
+- pypi: git+https://github.com/fjclark/yammbs?rev=489da7a9efe21c493570b3c20063c7e9995dd77b#489da7a9efe21c493570b3c20063c7e9995dd77b
   name: yammbs
-  version: 0.0.1.dev472+gb89f9798d
+  version: 0.0.1.dev474+g489da7a9e
   requires_python: '>=3.11'
 - conda: https://conda.anaconda.org/conda-forge/linux-64/yarl-1.22.0-py312h8a5da7c_0.conda
   sha256: 6e3f2db09387fc982b5400b842745084825cd2d4621e8278e4af8fb0dc2b55d8

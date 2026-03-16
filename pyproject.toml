@@ -69,9 +69,9 @@ mace-torch = "*"
 smee = { git = "https://github.com/openforcefield/smee.git", rev = "36bc8286b16ae815f13cfb10d8096ff1b9aeca0e" }
 descent = { git = "https://github.com/openforcefield/descent", rev = "15101d021d2a387809f0d877c61d4baabecdc78e" }
 presto = { git = "https://github.com/cole-group/presto.git", rev = "ecb2e96b4f317d1499266adeda607636959b232d"}
-yammbs = { git = "https://github.com/fjclark/yammbs", rev = "b89f9798db32e08049840035d937cba0375c38eb" }
-smirnoff-plugins = { git = "https://github.com/fjclark/smirnoff-plugins", rev = "8b45123f11498f22e29a57aeb6ac8697715f8429" }
-deepchem = { version = ">=2.7.0", extras = ["jax"] } # Seems to interfere with pytorch if ["torch"]
+yammbs = { git = "https://github.com/fjclark/yammbs", rev = "489da7a9efe21c493570b3c20063c7e9995dd77b" }
+smirnoff-plugins = { git = "https://github.com/fjclark/smirnoff-plugins", rev = "fd4e8e71a0a2c710d662f6001cabc802a5097cf6" }
+deepchem = { version = ">=2.7.0", extras = ["jax"] } # Interferes with pytorch if ["torch"]
 
 [tool.pixi.feature.espaloma.dependencies]
 espaloma = ">=0.3.1"
