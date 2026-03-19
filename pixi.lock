@@ -447,6 +447,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/pytorch_geometric-2.7.0-pyhc455866_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pytz-2025.2-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pyviz_comms-3.0.6-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/pyxdg-0.28-pyhd8ed1ab_0.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pyyaml-6.0.3-py312h8a5da7c_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pyzmq-27.1.0-py312hfb55c3c_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/qcelemental-0.29.0-pyhd8ed1ab_1.conda
@@ -472,6 +473,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/rocm-core-7.0.2-h54a6638_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/rpds-py-0.30.0-py312h868fb18_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/ruff-0.15.2-h40fa522_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/rustworkx-0.17.1-py310h1570de5_3.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/s2n-1.5.22-h96f233e_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/s3transfer-0.16.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/scikit-learn-1.8.0-np2py312h3226591_1.conda
@@ -525,6 +527,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/toml-0.10.2-pyhcf101f3_3.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/toml-f-0.4.3-hb1d0f04_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/tomli-2.4.0-pyhcf101f3_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/torch-geometric-2.6.1-pyhcf101f3_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/torchmd-net-2.6.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/torchmetrics-1.8.2-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/tornado-6.5.3-py312h4c3975b_0.conda
@@ -588,6 +591,8 @@ environments:
       - pypi: git+https://github.com/openforcefield/descent?rev=15101d021d2a387809f0d877c61d4baabecdc78e#15101d021d2a387809f0d877c61d4baabecdc78e
       - pypi: https://files.pythonhosted.org/packages/14/91/0f53835d0292a74e6b37e68125b669827e2a75a26e01c34741d6c13cca6c/dm_haiku-0.0.16-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/9a/b6/c8327065d1dd8bca28521fe65ff72b649ed17ca8a1f0c1f498006d7567b7/e3nn-0.4.4-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/b5/99/98f12c45565b75be7fe6cc9ac797df631cd2a04da5592ea5f2127a9e6ced/garnetff-0.1.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/7d/da/dd2867c25adbb41563720f14b5fc895c98bf88be682a3faff4f7b3118d2a/igraph-1.0.0-cp39-abi3-manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/a8/f7/ae4ecf183d9693cd5fcce7ee063c5e54f173b66dc80a8a79951861e1b557/jax-0.8.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e0/bf/e386c4bbfda3fb326a01594cc46c8ac90cdeeeacee4c553d9e3848f75893/jaxlib-0.8.2-cp312-cp312-manylinux_2_27_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/27/e5/cce82de2831e5aff9332d8d624bb57188f1b2af6ccf6979caf898a8a4348/jmp-0.0.4-py3-none-any.whl
@@ -604,9 +609,10 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/90/cc/bb6395c3f2b6bb739b1d3fc0e71f94e6a1c2e256df496237cbfd13cd74a6/python_hostlist-2.3.0.tar.gz
       - pypi: git+https://github.com/openforcefield/smee.git?rev=36bc8286b16ae815f13cfb10d8096ff1b9aeca0e#36bc8286b16ae815f13cfb10d8096ff1b9aeca0e
       - pypi: git+https://github.com/fjclark/smirnoff-plugins?rev=fd4e8e71a0a2c710d662f6001cabc802a5097cf6#fd4e8e71a0a2c710d662f6001cabc802a5097cf6
+      - pypi: https://files.pythonhosted.org/packages/24/99/4772b8e00a136f3e01236de33b0efda31ee7077203ba5967fcc76da94d65/texttable-1.7.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/fb/12/5911ae3eeec47800503a238d971e51722ccea5feb8569b735184d5fcdbc0/toolz-1.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c0/f1/a47c831436595cffbfd69a19ea129a23627120b13f4886499e58775329d1/torch_ema-0.3-py3-none-any.whl
-      - pypi: git+https://github.com/fjclark/yammbs?rev=489da7a9efe21c493570b3c20063c7e9995dd77b#489da7a9efe21c493570b3c20063c7e9995dd77b
+      - pypi: git+https://github.com/fjclark/yammbs?rev=bbf11308ee7e3c75525f827f98bfe4dadc8950ba#bbf11308ee7e3c75525f827f98bfe4dadc8950ba
       - pypi: ./
   espaloma:
     channels:
@@ -3796,6 +3802,13 @@ packages:
   - pkg:pypi/fsspec?source=compressed-mapping
   size: 148757
   timestamp: 1770387898414
+- pypi: https://files.pythonhosted.org/packages/b5/99/98f12c45565b75be7fe6cc9ac797df631cd2a04da5592ea5f2127a9e6ced/garnetff-0.1.0-py3-none-any.whl
+  name: garnetff
+  version: 0.1.0
+  sha256: 1825ef3847962b2864b6ea5186ec3138be10a71804d1eab5ab73d3311dc80dcc
+  requires_dist:
+  - torch
+  - torch-geometric
 - conda: https://conda.anaconda.org/conda-forge/noarch/gast-0.7.0-pyhd8ed1ab_0.conda
   sha256: 587a0e2606026716760af58e5d7c15ea02a848bd076a324946798be29d0229db
   md5: 377a825d91b5d6fcc0e6cdb98bbe9799
@@ -4267,6 +4280,39 @@ packages:
   - pkg:pypi/idna?source=hash-mapping
   size: 50721
   timestamp: 1760286526795
+- pypi: https://files.pythonhosted.org/packages/7d/da/dd2867c25adbb41563720f14b5fc895c98bf88be682a3faff4f7b3118d2a/igraph-1.0.0-cp39-abi3-manylinux_2_28_x86_64.whl
+  name: igraph
+  version: 1.0.0
+  sha256: 2d04c2c76f686fb1f554ee35dfd3085f5e73b7965ba6b4cf06d53e66b1955522
+  requires_dist:
+  - texttable>=1.6.2
+  - cairocffi>=1.2.0 ; extra == 'cairo'
+  - matplotlib>=3.6.0 ; platform_python_implementation != 'PyPy' and extra == 'matplotlib'
+  - plotly>=5.3.0 ; extra == 'plotly'
+  - cairocffi>=1.2.0 ; extra == 'plotting'
+  - cairocffi>=1.2.0 ; extra == 'test'
+  - networkx>=2.5 ; extra == 'test'
+  - pytest>=7.0.1 ; extra == 'test'
+  - pytest-timeout>=2.1.0 ; extra == 'test'
+  - numpy>=1.19.0 ; platform_python_implementation != 'PyPy' and extra == 'test'
+  - pandas>=1.1.0 ; platform_python_implementation != 'PyPy' and extra == 'test'
+  - scipy>=1.5.0 ; platform_python_implementation != 'PyPy' and extra == 'test'
+  - matplotlib>=3.6.0 ; platform_python_implementation != 'PyPy' and extra == 'test'
+  - plotly>=5.3.0 ; extra == 'test'
+  - pillow>=9 ; platform_python_implementation != 'PyPy' and extra == 'test'
+  - cairocffi>=1.2.0 ; extra == 'test-win-arm64'
+  - networkx>=2.5 ; extra == 'test-win-arm64'
+  - pytest>=7.0.1 ; extra == 'test-win-arm64'
+  - pytest-timeout>=2.1.0 ; extra == 'test-win-arm64'
+  - cairocffi>=1.2.0 ; extra == 'test-musl'
+  - networkx>=2.5 ; extra == 'test-musl'
+  - pytest>=7.0.1 ; extra == 'test-musl'
+  - pytest-timeout>=2.1.0 ; extra == 'test-musl'
+  - sphinx>=7.0.0 ; extra == 'doc'
+  - sphinx-rtd-theme>=1.3.0 ; extra == 'doc'
+  - sphinx-gallery>=0.14.0 ; extra == 'doc'
+  - pydoctor>=23.4.0 ; extra == 'doc'
+  requires_python: '>=3.9'
 - conda: https://conda.anaconda.org/conda-forge/linux-64/immutables-0.21-py312h4c3975b_2.conda
   sha256: 33f87bd1b9a48c208919641a878541c13316afa1cfabea97c534227d52904a0b
   md5: 4cf92a9dd8712cdde044fb56be498bd4
@@ -9012,7 +9058,7 @@ packages:
 - pypi: ./
   name: presto-benchmark
   version: 0.1.0
-  sha256: a25e94c2637faedaf65b21b3651cacb09c56b545105683f1bafd61ea52417240
+  sha256: 3803bb3549a9f4de48297bc5f22acde209ed85919dff61cd36d972486c23f40e
   requires_python: '>=3.12'
 - pypi: https://files.pythonhosted.org/packages/ee/8c/83087ebc47ab0396ce092363001fa37c17153119ee282700c0713a195853/prettytable-3.17.0-py3-none-any.whl
   name: prettytable
@@ -9960,6 +10006,17 @@ packages:
   - pkg:pypi/pyviz-comms?source=hash-mapping
   size: 49425
   timestamp: 1750669964512
+- conda: https://conda.anaconda.org/conda-forge/noarch/pyxdg-0.28-pyhd8ed1ab_0.tar.bz2
+  sha256: 1a4d7924fccdb6385713dc6fc2de37476dea928a61aa7e2d21c6b58290e4b140
+  md5: c1c05cc9dfdaee224e49c59fc7e47530
+  depends:
+  - python >=3
+  license: LGPL-2.0-only
+  license_family: LGPL
+  purls:
+  - pkg:pypi/pyxdg?source=hash-mapping
+  size: 47505
+  timestamp: 1654536879770
 - conda: https://conda.anaconda.org/conda-forge/linux-64/pyyaml-6.0.3-py312h8a5da7c_0.conda
   sha256: 1b3dc4c25c83093fff08b86a3574bc6b94ba355c8eba1f35d805c5e256455fc7
   md5: fba10c2007c8b06f77c5a23ce3a635ad
@@ -10461,6 +10518,28 @@ packages:
   - pkg:pypi/ruff?source=hash-mapping
   size: 9284016
   timestamp: 1771570005837
+- conda: https://conda.anaconda.org/conda-forge/linux-64/rustworkx-0.17.1-py310h1570de5_3.conda
+  noarch: python
+  sha256: 71dc20eaabbf459310a8f21a403bacaf475d0aacebd1426dcd1238eda20e2c24
+  md5: a2075b9c1a7e71a8289b6d62fa16a5e8
+  depends:
+  - numpy >=1.16.0,<3
+  - python
+  - libgcc >=14
+  - __glibc >=2.17,<3.0.a0
+  - _python_abi3_support 1.*
+  - cpython >=3.10
+  constrains:
+  - matplotlib >=3.0
+  - matplotlib-base >=3.0
+  - pillow >=5.4
+  - __glibc >=2.17
+  license: Apache-2.0
+  license_family: APACHE
+  purls:
+  - pkg:pypi/rustworkx?source=hash-mapping
+  size: 2022687
+  timestamp: 1756826997220
 - conda: https://conda.anaconda.org/conda-forge/linux-64/s2n-1.5.22-h96f233e_0.conda
   sha256: 12dc8ff959fbf28384fdfd8946a71bdfa77ec84f40dcd0ca5a4ae02a652583ca
   md5: 2f6fc0cf7cd248a32a52d7c8609d93a9
@@ -11476,6 +11555,10 @@ packages:
   - pkg:pypi/terminado?source=hash-mapping
   size: 24749
   timestamp: 1766513766867
+- pypi: https://files.pythonhosted.org/packages/24/99/4772b8e00a136f3e01236de33b0efda31ee7077203ba5967fcc76da94d65/texttable-1.7.0-py2.py3-none-any.whl
+  name: texttable
+  version: 1.7.0
+  sha256: 72227d592c82b3d7f672731ae73e4d1f88cd8e2ef5b075a7a7f01a23a3743917
 - conda: https://conda.anaconda.org/conda-forge/noarch/threadpoolctl-3.6.0-pyhecae5ae_0.conda
   sha256: 6016672e0e72c4cf23c0cf7b1986283bd86a9c17e8d319212d78d8e9ae42fdfd
   md5: 9d64911b31d57ca443e9f1e36b04385f
@@ -11621,6 +11704,27 @@ packages:
   sha256: 823ad8da5c10bc1eebcec739cc3f521aa9573229fe04e5673c304d29f1433279
   requires_dist:
   - torch
+- conda: https://conda.anaconda.org/conda-forge/noarch/torch-geometric-2.6.1-pyhcf101f3_1.conda
+  sha256: aefab2e8de4766193396ff2e9f6ac56d01aa7559b7114dca47655abcb56cb0f1
+  md5: 485a36d2f3cc9029618e91eea2869d50
+  depends:
+  - aiohttp
+  - fsspec
+  - jinja2
+  - numpy
+  - psutil
+  - pyparsing
+  - python >=3.10
+  - pytorch
+  - requests
+  - tqdm
+  - python
+  license: MIT
+  license_family: MIT
+  purls:
+  - pkg:pypi/torch-geometric?source=hash-mapping
+  size: 624246
+  timestamp: 1765170827157
 - conda: https://conda.anaconda.org/conda-forge/linux-64/torchdata-0.7.1-py312he3f8c6c_7.conda
   sha256: d52aaa38a0fb840f6e37a80c2a7403ccacf56b087975ec7579e6671fc5bc701d
   md5: c45912bd30ac2ca764108e44cca7b56e
@@ -12502,9 +12606,9 @@ packages:
   purls: []
   size: 85189
   timestamp: 1753484064210
-- pypi: git+https://github.com/fjclark/yammbs?rev=489da7a9efe21c493570b3c20063c7e9995dd77b#489da7a9efe21c493570b3c20063c7e9995dd77b
+- pypi: git+https://github.com/fjclark/yammbs?rev=bbf11308ee7e3c75525f827f98bfe4dadc8950ba#bbf11308ee7e3c75525f827f98bfe4dadc8950ba
   name: yammbs
-  version: 0.0.1.dev474+g489da7a9e
+  version: 0.0.1.dev475+gbbf11308e
   requires_python: '>=3.11'
 - conda: https://conda.anaconda.org/conda-forge/linux-64/yarl-1.22.0-py312h8a5da7c_0.conda
   sha256: 6e3f2db09387fc982b5400b842745084825cd2d4621e8278e4af8fb0dc2b55d8

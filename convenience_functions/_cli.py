@@ -116,6 +116,57 @@ def process_folmsbee_smiles_cli(
     )
 
 
+@app.command("analyse-folmsbee")
+def analyse_folmsbee_cli(
+    folmsbee_repo_dir: Path = typer.Argument(
+        ..., help="Path to Folmsbee conformer-benchmark repository clone"
+    ),
+    presto_output_dir: Path = typer.Argument(
+        ..., help="Path to PRESTO molecule output directory for this config"
+    ),
+    output_dir: Path = typer.Argument(..., help="Output directory for analysis"),
+    force_fields: list[str] = typer.Option(
+        [], "--force-field", help="Force field path to evaluate (repeatable)"
+    ),
+    precomputed_methods: list[str] = typer.Option(
+        [],
+        "--precomputed-method",
+        help="Precomputed method column from data-final.csv (repeatable)",
+    ),
+    reference_method: str = typer.Option(
+        "dlpno", help="Reference method column from data-final.csv"
+    ),
+    torsion_restraint_force_constant: float = typer.Option(
+        10_000.0,
+        help="Force constant for rotatable torsion restraints in kJ/mol/rad²",
+    ),
+    mm_minimization_steps: int = typer.Option(
+        0,
+        help="Max minimization iterations per conformer",
+    ),
+    n_processes: Optional[int] = typer.Option(
+        None,
+        help="Number of worker processes (reserved for future parallel execution)",
+    ),
+) -> None:
+    """Analyse Folmsbee conformer energies with restrained minimization."""
+    from convenience_functions.analyse_folmsbee import analyse_folmsbee
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    analyse_folmsbee(
+        folmsbee_repo_dir=folmsbee_repo_dir,
+        presto_output_dir=presto_output_dir,
+        output_dir=output_dir,
+        force_field_paths=force_fields,
+        precomputed_methods=precomputed_methods,
+        reference_method=reference_method,
+        torsion_restraint_force_constant=torsion_restraint_force_constant,
+        mm_minimization_steps=mm_minimization_steps,
+        n_processes=n_processes,
+    )
+
+
 @app.command("split-qca-input")
 def split_qca_input_cli(
     input_json_path: Path = typer.Argument(..., help="Path to input QCA JSON"),

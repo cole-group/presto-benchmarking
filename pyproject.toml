@@ -17,7 +17,7 @@ cuda = "12"
 [tool.pixi.feature.common.dependencies]
 python = ">=3.12"
 pip = "*"
-openff-toolkit = "*"
+openff-toolkit = ">=0.18.0"
 openff-units = "*"
 openff-qcsubmit = ">=0.55.0"
 openff-interchange = ">=0.5.2"
@@ -69,15 +69,25 @@ mace-torch = "*"
 smee = { git = "https://github.com/openforcefield/smee.git", rev = "36bc8286b16ae815f13cfb10d8096ff1b9aeca0e" }
 descent = { git = "https://github.com/openforcefield/descent", rev = "15101d021d2a387809f0d877c61d4baabecdc78e" }
 presto = { git = "https://github.com/cole-group/presto.git", rev = "ecb2e96b4f317d1499266adeda607636959b232d"}
-yammbs = { git = "https://github.com/fjclark/yammbs", rev = "489da7a9efe21c493570b3c20063c7e9995dd77b" }
+yammbs = { git = "https://github.com/fjclark/yammbs", rev = "bbf11308ee7e3c75525f827f98bfe4dadc8950ba" }
 smirnoff-plugins = { git = "https://github.com/fjclark/smirnoff-plugins", rev = "fd4e8e71a0a2c710d662f6001cabc802a5097cf6" }
 deepchem = { version = ">=2.7.0", extras = ["jax"] } # Interferes with pytorch if ["torch"]
 
 [tool.pixi.feature.espaloma.dependencies]
 espaloma = ">=0.3.1"
 
+[tool.pixi.feature.garnet.dependencies]
+rustworkx = "*"
+pyxdg = "*"
+torch-geometric = "*"
+
+[tool.pixi.feature.garnet.pypi-dependencies]
+garnetff = "*"
+igraph = "*"
+
+
 [tool.pixi.environments]
-default = {features = ["common", "standard"]}
+default = {features = ["common", "standard", "garnet"]}
 espaloma = {features = ["common", "espaloma"]}
 
 [tool.setuptools.package-dir]

@@ -72,6 +72,11 @@ def yammbs_target_config(wildcards: Any) -> dict[str, Any]:
     return config["yammbs_analysis"]["targets"][wildcards.dataset][wildcards.dataset_type]
 
 
+def folmsbee_target_config(wildcards: Any) -> dict[str, Any]:
+    """Return Folmsbee analysis config for a dataset split."""
+    return config["folmsbee_analysis"]["targets"][wildcards.dataset_type]
+
+
 def protein_torsion_combined_ff(wildcards: Any) -> str:
     """Return path to the combined force field for protein torsion minimisation.
 
@@ -102,6 +107,8 @@ rule all:
         "benchmarking/tnet500/output/test/default/combined_force_field.offxml",
         # JACS Fragments
         "benchmarking/jacs_fragments/output/test/default/combined_force_field.offxml",
+        # Folmsbee conformer analysis
+        "benchmarking/folmsbee_conformers/analysis/test/default/aggregate_stats.csv",
         # yammbs torsion analyses
         "benchmarking/tnet500/analysis/test/default/metrics.json",
         "benchmarking/tnet500/analysis/validation/ablations/metrics.json",
@@ -190,6 +197,49 @@ checkpoint process_folmsbee_smiles:
     shell:
         "pixi run -e default presto-benchmark process-folmsbee-smiles "
         "{input.gh_repo}/SMILES/molecules.smi {output}"
+
+
+rule analyse_folmsbee_conformers:
+    input:
+        gh_repo=rules.get_folmsbee_conformer_input.output[0],
+        combined_ff="benchmarking/folmsbee_conformers/output/{dataset_type}/{config_name}/combined_force_field.offxml",
+    output:
+        results_csv="benchmarking/folmsbee_conformers/analysis/{dataset_type}/{config_name}/results.csv",
+        per_molecule_stats_csv="benchmarking/folmsbee_conformers/analysis/{dataset_type}/{config_name}/per_molecule_stats.csv",
+        aggregate_stats_csv="benchmarking/folmsbee_conformers/analysis/{dataset_type}/{config_name}/aggregate_stats.csv",
+    params:
+        analysis_dir=lambda wc: f"benchmarking/folmsbee_conformers/analysis/{wc.dataset_type}/{wc.config_name}",
+        presto_output_dir=lambda wc: f"benchmarking/folmsbee_conformers/output/{wc.dataset_type}/{wc.config_name}",
+        precomputed_method_opts=lambda wc: " ".join(
+            f"--precomputed-method '{method}'"
+            for method in config["folmsbee_analysis"]["precomputed_methods"]
+        ),
+        extra_ff_opts=lambda wc: " ".join(
+            f"--force-field '{ff}'"
+            for ff in folmsbee_target_config(wc).get("extra_force_fields", [])
+        ),
+        reference_method=lambda wc: config["folmsbee_analysis"]["reference_method"],
+        torsion_restraint_force_constant=lambda wc: config["folmsbee_analysis"][
+            "torsion_restraint_force_constant"
+        ],
+        mm_minimization_steps=lambda wc: config["folmsbee_analysis"][
+            "mm_minimization_steps"
+        ],
+        n_processes_opt=lambda wc: (
+            f"--n-processes {config['folmsbee_analysis']['n_processes']}"
+            if config["folmsbee_analysis"].get("n_processes") is not None
+            else ""
+        ),
+    shell:
+        "pixi run -e default presto-benchmark analyse-folmsbee "
+        "{input.gh_repo} {params.presto_output_dir} {params.analysis_dir} "
+        "--reference-method '{params.reference_method}' "
+        "--torsion-restraint-force-constant {params.torsion_restraint_force_constant} "
+        "--mm-minimization-steps {params.mm_minimization_steps} "
+        "--force-field '{input.combined_ff}' "
+        "{params.extra_ff_opts} "
+        "{params.precomputed_method_opts} "
+        "{params.n_processes_opt}"
 
 
 ############ TNet 500 #############
