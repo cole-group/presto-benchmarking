@@ -51,25 +51,28 @@ presto-benchmark = { path = ".", editable = true }
 [tool.pixi.feature.standard.dependencies]
 pyyaml = "*"
 datasets = "*"
-openmm = "*"
-openmm-ml = ">=1.5"
+openmm = ">=8.5.0"
 tensorboardX = "*"
 tensorboard = "*"
 versioneer = "*"
-pytorch-gpu = "*"
+pytorch-gpu = "==2.8.0"
 pydantic = ">=2"
 pydantic-settings = "*"
 pydantic-units = "*"
 cuda-version = ">=12"
-openmm-torch = "*"
-torchmd-net = "*"
+# openmm-torch = ">=1.5.1"
+torchmd-net = ">=3.0.3"
+cuda-cudart-dev = ">=12,<13"
 
 [tool.pixi.feature.standard.pypi-dependencies]
-mace-torch = "*"
+mace-torch = "==0.3.15"
 smee = { git = "https://github.com/openforcefield/smee.git", rev = "36bc8286b16ae815f13cfb10d8096ff1b9aeca0e" }
 descent = { git = "https://github.com/openforcefield/descent", rev = "15101d021d2a387809f0d877c61d4baabecdc78e" }
-presto = { git = "https://github.com/cole-group/presto.git", rev = "ecb2e96b4f317d1499266adeda607636959b232d"}
+presto = { git = "https://github.com/cole-group/presto.git", rev = "1aa5eb6c743fd6150dc127f943dce54471ead6ba"}
+# Use local presto install for development
+# presto = { path = "/home/campus.ncl.ac.uk/nfc78/software/devel/presto-clean/", editable = true }
 yammbs = { git = "https://github.com/fjclark/yammbs", rev = "bbf11308ee7e3c75525f827f98bfe4dadc8950ba" }
+openmmml = { git = "https://github.com/openmm/openmm-ml.git", rev = "e2b3ed8f630f6898ad4bf60603fe382f99479da5" }
 smirnoff-plugins = { git = "https://github.com/fjclark/smirnoff-plugins", rev = "fd4e8e71a0a2c710d662f6001cabc802a5097cf6" }
 deepchem = { version = ">=2.7.0", extras = ["jax"] } # Interferes with pytorch if ["torch"]
 

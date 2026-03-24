@@ -38,6 +38,7 @@ _WORKER_MOLECULE_DIRS: dict[str, str] | None = None
 _WORKER_TORSION_K: float | None = None
 _WORKER_MM_STEPS: int | None = None
 _WORKER_PER_MOL_ROOT: str | None = None
+_PLOT_RMSE_MAX = 4.0
 
 
 def _compute_dihedral_radians(
@@ -69,6 +70,11 @@ def _method_label(method_name: str) -> str:
 
 def _method_id(method_name: str) -> str:
     base = _method_label(method_name)
+    return re.sub(r"[^A-Za-z0-9_.-]+", "_", base)
+
+
+def _component_id(component_name: str) -> str:
+    base = component_name.strip() or "unknown"
     return re.sub(r"[^A-Za-z0-9_.-]+", "_", base)
 
 
@@ -152,7 +158,7 @@ def _evaluate_with_reused_system(
     force_field: ForceField,
     torsion_restraint_force_constant: float,
     mm_minimization_steps: int,
-) -> tuple[list[float], list[np.ndarray]]:
+) -> tuple[list[float], list[np.ndarray], list[dict[str, float]]]:
     omm_system = Interchange.from_smirnoff(
         force_field,
         reference_molecule.to_topology(),
@@ -176,8 +182,34 @@ def _evaluate_with_reused_system(
             torsion_restraint_force_constant,
         )
 
+    restraint_force_indices = set(force_indices)
+    available_groups = [
+        group for group in range(32) if group != restraint_force_group
+    ]
+    non_restraint_forces = [
+        (force_index, force)
+        for force_index, force in enumerate(omm_system.getForces())
+        if force_index not in restraint_force_indices
+    ]
+    if len(non_restraint_forces) > len(available_groups):
+        raise RuntimeError(
+            "Too many OpenMM forces to assign unique force groups "
+            f"({len(non_restraint_forces)} > {len(available_groups)})"
+        )
+
+    component_force_groups: dict[str, list[int]] = {}
+    for (_, force), group in zip(non_restraint_forces, available_groups):
+        force.setForceGroup(group)
+        raw_name = force.getName().strip() if force.getName() else ""
+        component_name = raw_name or force.__class__.__name__
+        component_force_groups.setdefault(component_name, []).append(group)
+
+    # Ensure the context picks up updated force-group assignments.
+    simulation.context.reinitialize(preserveState=True)
+
     energies: list[float] = []
     minimized_xyz_ang: list[np.ndarray] = []
+    component_energies: list[dict[str, float]] = []
     try:
         for coordinates in conformer_positions:
             simulation.context.setPositions(coordinates)
@@ -194,7 +226,9 @@ def _evaluate_with_reused_system(
                     torsion_restraint_force_constant,
                 )
 
-            simulation.minimizeEnergy(maxIterations=mm_minimization_steps)
+            # Use -1 as a sentinel for single-point evaluation (no minimization).
+            if mm_minimization_steps != -1:
+                simulation.minimizeEnergy(maxIterations=mm_minimization_steps)
 
             if restraint_force_group is not None:
                 groups_mask = sum(
@@ -212,13 +246,27 @@ def _evaluate_with_reused_system(
                 omm_unit.kilocalorie_per_mole
             )
             xyz = state.getPositions(asNumpy=True).value_in_unit(omm_unit.angstrom)
+
+            current_component_energies: dict[str, float] = {}
+            for component_name, groups in component_force_groups.items():
+                groups_mask = sum(1 << group for group in groups)
+                component_state = simulation.context.getState(
+                    getEnergy=True,
+                    groups=groups_mask,
+                )
+                component_energy = component_state.getPotentialEnergy().value_in_unit(
+                    omm_unit.kilocalorie_per_mole
+                )
+                current_component_energies[component_name] = float(component_energy)
+
             energies.append(float(energy))
             minimized_xyz_ang.append(np.asarray(xyz))
+            component_energies.append(current_component_energies)
     finally:
         if force_indices:
             _remove_torsion_restraint_forces(simulation, force_indices)
 
-    return energies, minimized_xyz_ang
+    return energies, minimized_xyz_ang, component_energies
 
 
 def _write_minimized_conformer_sdf(
@@ -270,6 +318,22 @@ def _process_molecule_worker(
     mm_results_path = molecule_dir / "mm_results.csv"
 
     cached_ok = mm_results_path.exists()
+    mm_df_cached: pd.DataFrame | None = None
+    if cached_ok:
+        mm_df_cached = pd.read_csv(mm_results_path)
+        required_mm_cols = [
+            "geom",
+            *[ff_path for ff_path in _WORKER_FFS],
+            *[f"{ff_path}__rmsd_angstrom" for ff_path in _WORKER_FFS],
+        ]
+        if not all(col in mm_df_cached.columns for col in required_mm_cols):
+            cached_ok = False
+        elif not all(
+            len(mm_df_cached[mm_df_cached["geom"] == geometry]) == 1
+            for geometry in geometries
+        ):
+            cached_ok = False
+
     if cached_ok:
         for ff_id in ff_ids.values():
             for geometry in geometries:
@@ -280,9 +344,17 @@ def _process_molecule_worker(
             if not cached_ok:
                 break
 
-    if cached_ok:
-        mm_df = pd.read_csv(mm_results_path)
+    if cached_ok and mm_df_cached is not None:
+        mm_df = mm_df_cached
         results: dict[str, dict[str, float]] = {}
+        component_columns_by_ff = {
+            ff_path: [
+                col
+                for col in mm_df.columns
+                if col.startswith(f"{ff_path}__component__")
+            ]
+            for ff_path in _WORKER_FFS
+        }
         for geometry in geometries:
             row = mm_df[mm_df["geom"] == geometry]
             geom_result: dict[str, float] = {}
@@ -293,10 +365,16 @@ def _process_molecule_worker(
                     geom_result[f"{ff_path}__rmsd_angstrom"] = float(
                         row.get(f"{ff_path}__rmsd_angstrom", np.nan)
                     )
+                    for component_col in component_columns_by_ff[ff_path]:
+                        geom_result[component_col] = float(
+                            row.get(component_col, np.nan)
+                        )
             else:
                 for ff_path in _WORKER_FFS:
                     geom_result[ff_path] = np.nan
                     geom_result[f"{ff_path}__rmsd_angstrom"] = np.nan
+                    for component_col in component_columns_by_ff[ff_path]:
+                        geom_result[component_col] = np.nan
             results[geometry] = geom_result
         return molecule_name, results
 
@@ -341,22 +419,65 @@ def _process_molecule_worker(
     results: dict[str, dict[str, float]] = {
         g: {} for g in loaded_geometries
     }
+    cached_mm_df = pd.read_csv(mm_results_path) if mm_results_path.exists() else None
 
     for ff_path, force_field in _WORKER_FFS.items():
         ff_id = ff_ids[ff_path]
         ff_dir = minimized_root / ff_id
         ff_dir.mkdir(parents=True, exist_ok=True)
+
+        ff_component_cols: list[str] = []
+        ff_has_cached_values = False
+        if cached_mm_df is not None:
+            ff_component_cols = [
+                col
+                for col in cached_mm_df.columns
+                if col.startswith(f"{ff_path}__component__")
+            ]
+            ff_required_cols = [ff_path, f"{ff_path}__rmsd_angstrom"]
+            ff_has_cached_values = all(
+                col in cached_mm_df.columns for col in ff_required_cols
+            ) and all(
+                len(cached_mm_df[cached_mm_df["geom"] == geometry]) == 1
+                for geometry in loaded_geometries
+            )
+
+        ff_has_cached_sdfs = all(
+            (ff_dir / f"{Path(geometry).stem}.sdf").exists()
+            for geometry in loaded_geometries
+        )
+
+        if ff_has_cached_values and ff_has_cached_sdfs and cached_mm_df is not None:
+            for index, geometry in enumerate(loaded_geometries):
+                row = cached_mm_df[cached_mm_df["geom"] == geometry].iloc[0]
+                mm_rows[index][ff_path] = float(row.get(ff_path, np.nan))
+                mm_rows[index][f"{ff_path}__rmsd_angstrom"] = float(
+                    row.get(f"{ff_path}__rmsd_angstrom", np.nan)
+                )
+                results[geometry][ff_path] = mm_rows[index][ff_path]  # type: ignore[index]
+                results[geometry][f"{ff_path}__rmsd_angstrom"] = mm_rows[index][
+                    f"{ff_path}__rmsd_angstrom"
+                ]
+                for component_col in ff_component_cols:
+                    mm_rows[index][component_col] = float(
+                        row.get(component_col, np.nan)
+                    )
+                    results[geometry][component_col] = mm_rows[index][component_col]
+            continue
+
         try:
-            energies, minimized_xyz_ang = _evaluate_with_reused_system(
+            energies, minimized_xyz_ang, component_energies = _evaluate_with_reused_system(
                 reference_molecule=reference_molecule,
                 conformer_positions=loaded_conformer_positions,
                 force_field=force_field,
                 torsion_restraint_force_constant=_WORKER_TORSION_K,
                 mm_minimization_steps=_WORKER_MM_STEPS,
             )
-        except Exception:
-            energies = [np.nan for _ in loaded_geometries]
-            minimized_xyz_ang = [None for _ in loaded_geometries]
+        except Exception as error:
+            raise RuntimeError(
+                "Minimization/evaluation failed for "
+                f"molecule={molecule_name}, force_field={ff_path}"
+            ) from error
 
         for index, geometry in enumerate(loaded_geometries):
             energy = float(energies[index]) if index < len(energies) else np.nan
@@ -378,6 +499,16 @@ def _process_molecule_worker(
             mm_rows[index][f"{ff_path}__rmsd_angstrom"] = rmsd_value
             results[geometry][ff_path] = mm_rows[index][ff_path]  # type: ignore[index]
             results[geometry][f"{ff_path}__rmsd_angstrom"] = rmsd_value
+
+            if index < len(component_energies):
+                for component_name, component_energy in component_energies[
+                    index
+                ].items():
+                    component_col = (
+                        f"{ff_path}__component__{_component_id(component_name)}"
+                    )
+                    mm_rows[index][component_col] = component_energy * -1.0
+                    results[geometry][component_col] = mm_rows[index][component_col]
 
     pd.DataFrame(mm_rows).to_csv(mm_results_path, index=False)
     return molecule_name, results
@@ -409,19 +540,28 @@ def _plot_correlation(
     reference_method: str,
     output_path: Path,
 ) -> None:
-    reference = molecule_df[reference_method].to_numpy(dtype=float)
-    reference_rel = _safe_relative(reference)
+    if len(molecule_df.dropna(subset=[reference_method])) < 2:
+        return
+
     fig, ax = plt.subplots(figsize=(7, 6))
-    min_value = float(np.min(reference_rel))
-    max_value = float(np.max(reference_rel))
+    min_value: float | None = None
+    max_value: float | None = None
+    plotted_any = False
 
     for method_name in method_names:
-        method_values = molecule_df[method_name].to_numpy(dtype=float)
-        if np.isnan(method_values).any() or np.isnan(reference_rel).any():
+        filtered_df = molecule_df.dropna(subset=[reference_method, method_name]).copy()
+        if len(filtered_df) < 2:
             continue
+
+        reference = filtered_df[reference_method].to_numpy(dtype=float)
+        method_values = filtered_df[method_name].to_numpy(dtype=float)
+        reference_rel = _safe_relative(reference)
         method_rel = _safe_relative(method_values)
-        min_value = min(min_value, float(np.min(method_rel)))
-        max_value = max(max_value, float(np.max(method_rel)))
+        current_min = float(min(np.min(reference_rel), np.min(method_rel)))
+        current_max = float(max(np.max(reference_rel), np.max(method_rel)))
+        min_value = current_min if min_value is None else min(min_value, current_min)
+        max_value = current_max if max_value is None else max(max_value, current_max)
+
         stats_values = _calculate_stats(reference, method_values)
         label = (
             f"{_method_label(method_name)} "
@@ -430,13 +570,43 @@ def _plot_correlation(
             f"RMSE={stats_values['rmse']:.2f}, "
             f"MAE={stats_values['mae']:.2f})"
         )
-        ax.scatter(reference_rel, method_rel, label=label)
+        scatter = ax.scatter(reference_rel, method_rel, label=label)
+        plotted_any = True
 
-    ax.plot([min_value, max_value], [min_value, max_value], linestyle="--", color="k")
+        if method_name.endswith("/combined_force_field.offxml") and "geom" in filtered_df:
+            marker_colour = scatter.get_facecolor()[0]
+            for x_value, y_value, geom_label in zip(
+                reference_rel,
+                method_rel,
+                filtered_df["geom"],
+            ):
+                ax.text(
+                    x_value,
+                    y_value,
+                    str(geom_label),
+                    fontsize=6,
+                    color=marker_colour,
+                    ha="left",
+                    va="bottom",
+                    alpha=0.9,
+                )
+
+    if plotted_any and min_value is not None and max_value is not None:
+        ax.plot([min_value, max_value], [min_value, max_value], linestyle="--", color="k")
+        ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
+    else:
+        ax.text(
+            0.5,
+            0.5,
+            "No methods with >=2 valid conformers",
+            transform=ax.transAxes,
+            ha="center",
+            va="center",
+        )
+
     ax.set_xlabel(f"{reference_method} rel. conformer AE / kcal mol$^{{-1}}$")
     ax.set_ylabel("Method rel. conformer AE / kcal mol$^{-1}$")
     ax.set_title(molecule_name)
-    ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
     fig.savefig(output_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
 
@@ -453,6 +623,9 @@ def _plot_overall_metric_distribution(
         return
 
     plot_df = per_molecule_stats.dropna(subset=[metric_column]).copy()
+    if "rmse_kcal_mol" in per_molecule_stats.columns:
+        # Keep metric plots on a consistent subset when excluding RMSE outliers.
+        plot_df = plot_df[plot_df["rmse_kcal_mol"] <= _PLOT_RMSE_MAX].copy()
     if len(plot_df) == 0:
         return
 
@@ -521,6 +694,174 @@ def _plot_overall_metric_distribution(
     ax.set_xlabel("force_field")
     ax.set_ylabel(metric_column)
     ax.tick_params(axis="x", rotation=15)
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+
+def _plot_rmse_vs_nonbonded_range(
+    per_molecule_stats: pd.DataFrame,
+    output_path: Path,
+) -> None:
+    required_cols = [
+        "rmse_kcal_mol",
+        "nonbonded_range_kcal_mol",
+        "force_field",
+    ]
+    if len(per_molecule_stats) == 0 or any(
+        col not in per_molecule_stats.columns for col in required_cols
+    ):
+        fig, ax = plt.subplots(figsize=(8, 6))
+        ax.text(
+            0.5,
+            0.5,
+            "No MM component ranges available",
+            transform=ax.transAxes,
+            ha="center",
+            va="center",
+        )
+        ax.set_axis_off()
+        fig.savefig(output_path, dpi=300, bbox_inches="tight")
+        plt.close(fig)
+        return
+
+    plot_df = per_molecule_stats.dropna(
+        subset=["rmse_kcal_mol", "nonbonded_range_kcal_mol", "force_field"]
+    ).copy()
+    plot_df = plot_df[plot_df["rmse_kcal_mol"] <= _PLOT_RMSE_MAX].copy()
+    if len(plot_df) == 0:
+        fig, ax = plt.subplots(figsize=(8, 6))
+        ax.text(
+            0.5,
+            0.5,
+            "No finite non-outlier RMSE/non-bonded ranges available",
+            transform=ax.transAxes,
+            ha="center",
+            va="center",
+        )
+        ax.set_axis_off()
+        fig.savefig(output_path, dpi=300, bbox_inches="tight")
+        plt.close(fig)
+        return
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    sns.scatterplot(
+        data=plot_df,
+        x="nonbonded_range_kcal_mol",
+        y="rmse_kcal_mol",
+        hue="force_field",
+        style="force_field",
+        s=60,
+        alpha=0.85,
+        ax=ax,
+    )
+    ax.set_xlabel("Non-bonded energy range across conformers / kcal mol$^{-1}$")
+    ax.set_ylabel("RMSE / kcal mol$^{-1}$")
+    ax.set_title("Per-molecule RMSE vs non-bonded energy range")
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+
+def _plot_relative_component_energies(
+    molecule_df: pd.DataFrame,
+    method_names: list[str],
+    output_path: Path,
+) -> None:
+    if "geom" not in molecule_df.columns:
+        return
+
+    component_columns_by_method: dict[str, list[str]] = {}
+    for method_name in method_names:
+        component_columns = [
+            col
+            for col in molecule_df.columns
+            if col.startswith(f"{method_name}__component__")
+        ]
+        if component_columns:
+            component_columns_by_method[method_name] = sorted(component_columns)
+
+    if len(component_columns_by_method) == 0:
+        return
+
+    method_count = len(component_columns_by_method)
+    fig, axes = plt.subplots(method_count, 1, figsize=(12, 3.5 * method_count))
+    if method_count == 1:
+        axes = [axes]
+
+    geom_labels = molecule_df["geom"].astype(str).tolist()
+    x_positions = np.arange(len(geom_labels), dtype=int)
+
+    for ax, (method_name, component_columns) in zip(
+        axes,
+        component_columns_by_method.items(),
+    ):
+        plotted_any = False
+        for component_column in component_columns:
+            values = molecule_df[component_column].to_numpy(dtype=float)
+            finite_mask = np.isfinite(values)
+            if np.sum(finite_mask) < 1:
+                continue
+
+            component_label = component_column.split("__component__", 1)[1]
+            relative_values = values.copy()
+            relative_values[finite_mask] = (
+                relative_values[finite_mask]
+                - np.mean(relative_values[finite_mask])
+            )
+
+            ax.plot(
+                x_positions[finite_mask],
+                relative_values[finite_mask],
+                marker="o",
+                linestyle="-",
+                linewidth=1.1,
+                markersize=3,
+                label=component_label,
+            )
+            plotted_any = True
+
+        overall_values = molecule_df[method_name].to_numpy(dtype=float)
+        overall_finite_mask = np.isfinite(overall_values)
+        if np.sum(overall_finite_mask) >= 1:
+            overall_relative = overall_values.copy()
+            overall_relative[overall_finite_mask] = (
+                overall_relative[overall_finite_mask]
+                - np.min(overall_relative[overall_finite_mask])
+            )
+            ax.plot(
+                x_positions[overall_finite_mask],
+                overall_relative[overall_finite_mask],
+                linestyle="-",
+                linewidth=2.2,
+                color="dimgray",
+                alpha=0.8,
+                label="overall_relative_min0",
+            )
+            plotted_any = True
+
+        ax.axhline(0.0, linestyle="--", color="k", linewidth=0.8)
+        ax.set_ylabel("Relative component E / kcal mol$^{-1}$")
+        ax.set_title(_method_label(method_name))
+        ax.set_xticks(x_positions)
+        if plotted_any:
+            ax.legend(fontsize=7, ncol=2)
+        else:
+            ax.text(
+                0.5,
+                0.5,
+                "No finite component energies",
+                transform=ax.transAxes,
+                ha="center",
+                va="center",
+            )
+
+    for ax in axes[:-1]:
+        ax.tick_params(axis="x", labelbottom=False)
+
+    axes[-1].set_xticks(x_positions)
+    axes[-1].set_xticklabels(geom_labels, rotation=90, fontsize=7)
+    axes[-1].set_xlabel("Conformer")
     fig.tight_layout()
     fig.savefig(output_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
@@ -658,18 +999,57 @@ def analyse_folmsbee(
                     row["rms_rmsd_angstrom"] = float(
                         np.sqrt(np.mean(rmsd_values**2))
                     )
+
+            nonbonded_tokens = (
+                "vdw",
+                "nonbonded",
+                "lennard",
+                "lj",
+                "buckingham",
+            )
+            nonbonded_component_columns = [
+                col
+                for col in molecule_df.columns
+                if col.startswith(f"{method_name}__component__")
+                and any(token in col.lower() for token in nonbonded_tokens)
+            ]
+            if len(nonbonded_component_columns) > 0:
+                nonbonded_matrix = molecule_df[nonbonded_component_columns].to_numpy(
+                    dtype=float
+                )
+                # Compute a single non-bonded energy per conformer, then range.
+                # Flattening all component values can inflate the range when
+                # multiple non-bonded components have different baselines.
+                finite_rows = np.all(np.isfinite(nonbonded_matrix), axis=1)
+                if np.sum(finite_rows) > 1:
+                    nonbonded_total = np.sum(
+                        nonbonded_matrix[finite_rows],
+                        axis=1,
+                    )
+                    row["nonbonded_range_kcal_mol"] = float(
+                        np.max(nonbonded_total) - np.min(nonbonded_total)
+                    )
+
             per_molecule_stats.append(row)
             molecule_rows.append(row)
 
-        complete_plot_df = molecule_df.dropna(subset=[reference_method, *method_names])
-        if len(complete_plot_df) >= 2:
+        # Plot even when some methods are missing so single-molecule diagnostics
+        # are still produced for partially complete datasets.
+        plot_input_df = molecule_df.dropna(subset=[reference_method])
+        if len(plot_input_df) >= 2:
             _plot_correlation(
-                molecule_df=complete_plot_df,
+                molecule_df=plot_input_df,
                 molecule_name=molecule_name,
                 method_names=method_names,
                 reference_method=reference_method,
                 output_path=per_mol_dir / "correlation.png",
             )
+
+        _plot_relative_component_energies(
+            molecule_df=molecule_df,
+            method_names=method_names,
+            output_path=per_mol_dir / "relative_component_energies.png",
+        )
 
         pd.DataFrame(molecule_rows).to_csv(
             per_mol_dir / "per_molecule_stats.csv",
@@ -740,6 +1120,10 @@ def analyse_folmsbee(
         per_molecule_stats_df,
         "mean_rmsd_angstrom",
         plot_dir / "overall_rmsd_distribution.png",
+    )
+    _plot_rmse_vs_nonbonded_range(
+        per_molecule_stats_df,
+        plot_dir / "rmse_vs_nonbonded_range.png",
     )
     logger.info(f"Saved results to {output_dir}")
 

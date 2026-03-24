@@ -196,7 +196,11 @@ checkpoint process_folmsbee_smiles:
         directory("benchmarking/folmsbee_conformers/input/test/smiles")
     shell:
         "pixi run -e default presto-benchmark process-folmsbee-smiles "
-        "{input.gh_repo}/SMILES/molecules.smi {output}"
+        "{input.gh_repo}/SMILES/molecules.smi {output} && "
+        "find {output} -maxdepth 1 -type f -name '*.smi' "
+        "! -name 'omegapdb_1m5d.smi' "
+        "! -name 'omegapdb_1sa4.smi' "
+        "! -name 'omegacsd_VORJER.smi' -delete"
 
 
 rule analyse_folmsbee_conformers:
@@ -207,6 +211,7 @@ rule analyse_folmsbee_conformers:
         results_csv="benchmarking/folmsbee_conformers/analysis/{dataset_type}/{config_name}/results.csv",
         per_molecule_stats_csv="benchmarking/folmsbee_conformers/analysis/{dataset_type}/{config_name}/per_molecule_stats.csv",
         aggregate_stats_csv="benchmarking/folmsbee_conformers/analysis/{dataset_type}/{config_name}/aggregate_stats.csv",
+        plots_dir=directory("benchmarking/folmsbee_conformers/analysis/{dataset_type}/{config_name}/plots"),
     params:
         analysis_dir=lambda wc: f"benchmarking/folmsbee_conformers/analysis/{wc.dataset_type}/{wc.config_name}",
         presto_output_dir=lambda wc: f"benchmarking/folmsbee_conformers/output/{wc.dataset_type}/{wc.config_name}",
