@@ -594,6 +594,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/zlib-ng-2.3.3-hceb46e0_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/zstandard-0.25.0-py312h5253ce2_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/zstd-1.5.7-hb78ec9c_6.conda
+      - pypi: https://files.pythonhosted.org/packages/9e/50/cdc9a1fc9b03ff7881b821e20e50db40a85149beebde67754dd67d8a4d23/aimnet-0.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/6a/c9/3bf4473e3b8131a733219346ff90cdab98e019b90c944fc339a599fc8896/deepchem-2.8.0-py3-none-any.whl
       - pypi: git+https://github.com/openforcefield/descent?rev=15101d021d2a387809f0d877c61d4baabecdc78e#15101d021d2a387809f0d877c61d4baabecdc78e
       - pypi: https://files.pythonhosted.org/packages/14/91/0f53835d0292a74e6b37e68125b669827e2a75a26e01c34741d6c13cca6c/dm_haiku-0.0.16-py3-none-any.whl
@@ -607,11 +608,13 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/01/6d/d5b578dce5c995ce8c9cbeb53871331e575a09bf11ca4739fac770665b6e/mace_torch-0.3.15-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/3c/ba/79020348dbdaa6786ff2162e11bc56095e0b949e8bb9813dee12ccc1f567/matscipy-1.2.0-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/3a/cb/28ce52eb94390dda42599c98ea0204d74799e4d8047a0eb559b6fd648056/ml_dtypes-0.5.4-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/63/97/9f57af74dd92fc5c0af6f8d5a7b8459c103e318d16f3d9dbd863826fccf8/nvalchemi_toolkit_ops-0.2.0-py3-none-any.whl
       - pypi: git+https://github.com/openmm/openmm-ml.git?rev=e2b3ed8f630f6898ad4bf60603fe382f99479da5#e2b3ed8f630f6898ad4bf60603fe382f99479da5
       - pypi: https://files.pythonhosted.org/packages/23/cd/066e86230ae37ed0be70aae89aabf03ca8d9f39c8aea0dec8029455b5540/opt_einsum-3.4.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8d/4c/e0370709aaf9d7ceb68f975cac559751e75954429a77e83202e680606560/opt_einsum_fx-0.1.4-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8a/69/6a93d8600c339d7687a05857c7907bd4dd8cf88691a5ea106d7a50af90a1/optax-0.2.8-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/dc/91/98a52415059db3f374757d0b7f0f16e3b5cd5976c90d1c2b56acaea039e6/orjson-3.11.7-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+      - pypi: git+https://github.com/cole-group/presto.git?rev=1aa5eb6c743fd6150dc127f943dce54471ead6ba#1aa5eb6c743fd6150dc127f943dce54471ead6ba
       - pypi: https://files.pythonhosted.org/packages/ee/8c/83087ebc47ab0396ce092363001fa37c17153119ee282700c0713a195853/prettytable-3.17.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/90/cc/bb6395c3f2b6bb739b1d3fc0e71f94e6a1c2e256df496237cbfd13cd74a6/python_hostlist-2.3.0.tar.gz
       - pypi: git+https://github.com/openforcefield/smee.git?rev=36bc8286b16ae815f13cfb10d8096ff1b9aeca0e#36bc8286b16ae815f13cfb10d8096ff1b9aeca0e
@@ -620,7 +623,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/c0/f1/a47c831436595cffbfd69a19ea129a23627120b13f4886499e58775329d1/torch_ema-0.3-py3-none-any.whl
       - pypi: git+https://github.com/fjclark/yammbs?rev=bbf11308ee7e3c75525f827f98bfe4dadc8950ba#bbf11308ee7e3c75525f827f98bfe4dadc8950ba
       - pypi: ./
-      - pypi: /home/campus.ncl.ac.uk/nfc78/software/devel/presto-clean
   espaloma:
     channels:
     - url: https://conda.anaconda.org/conda-forge/
@@ -1191,6 +1193,26 @@ packages:
   - pkg:pypi/absl-py?source=hash-mapping
   size: 109955
   timestamp: 1769637168641
+- pypi: https://files.pythonhosted.org/packages/9e/50/cdc9a1fc9b03ff7881b821e20e50db40a85149beebde67754dd67d8a4d23/aimnet-0.1.0-py3-none-any.whl
+  name: aimnet
+  version: 0.1.0
+  sha256: ca8822b4cb0b63c13071d0dea6dbb73806cbf64bb72ce50e33eafeab2c9f8a61
+  requires_dist:
+  - click>=8.1.7
+  - h5py>=3.12.1
+  - jinja2>=3.1.6
+  - numpy
+  - nvalchemi-toolkit-ops>=0.2
+  - pyyaml>=6.0.2
+  - requests>=2.32.3
+  - torch>=2.4
+  - warp-lang>=1.11
+  - ase==3.27.0 ; extra == 'ase'
+  - pysisyphus ; extra == 'pysis'
+  - omegaconf>=2.3.0 ; extra == 'train'
+  - pytorch-ignite>=0.5.1 ; extra == 'train'
+  - wandb>=0.18.5 ; extra == 'train'
+  requires_python: '>=3.11'
 - conda: https://conda.anaconda.org/conda-forge/noarch/aiohappyeyeballs-2.6.1-pyhd8ed1ab_0.conda
   sha256: 7842ddc678e77868ba7b92a726b437575b23aaec293bca0d40826f1026d90e27
   md5: 18fd895e0e775622906cdabfc3cf0fb4
@@ -7186,6 +7208,15 @@ packages:
   - pkg:pypi/numpy?source=compressed-mapping
   size: 8757569
   timestamp: 1773839284329
+- pypi: https://files.pythonhosted.org/packages/63/97/9f57af74dd92fc5c0af6f8d5a7b8459c103e318d16f3d9dbd863826fccf8/nvalchemi_toolkit_ops-0.2.0-py3-none-any.whl
+  name: nvalchemi-toolkit-ops
+  version: 0.2.0
+  sha256: d6b41c32f907da3d9b64d4ccc20aac11dfc29b7acadc8def52c874591603e2ee
+  requires_dist:
+  - numpy
+  - torch>=2.8.0
+  - warp-lang>=1.10.0
+  requires_python: '>=3.11'
 - conda: https://conda.anaconda.org/conda-forge/linux-64/ocl-icd-2.3.3-hb9d3cd8_0.conda
   sha256: 2254dae821b286fb57c61895f2b40e3571a070910fdab79a948ff703e1ea807b
   md5: 56f8947aa9d5cf37b0b3d43b83f34192
@@ -8091,15 +8122,14 @@ packages:
   - pkg:pypi/pre-commit?source=hash-mapping
   size: 200827
   timestamp: 1765937577534
-- pypi: /home/campus.ncl.ac.uk/nfc78/software/devel/presto-clean
+- pypi: git+https://github.com/cole-group/presto.git?rev=1aa5eb6c743fd6150dc127f943dce54471ead6ba#1aa5eb6c743fd6150dc127f943dce54471ead6ba
   name: presto
-  version: 0.5.2.dev3+gdc95271e4.d20260324
-  sha256: 7b88cacf0ec38a2381e84326dd05cb2e1e339d3434f06f1c122cc7cac17ae4a7
+  version: 0.6.0
   requires_python: '>=3.11,<3.15'
 - pypi: ./
   name: presto-benchmark
   version: 0.1.0
-  sha256: 16cb4cced78e07a55bb175e0d1a5c4a604bf148e93fe8d9237d165b6edc2caea
+  sha256: 90e4aa111bd3c93c4a64af1f5623889967ac924cc7c0d117c7aed8cc3350dba4
   requires_python: '>=3.12'
 - pypi: https://files.pythonhosted.org/packages/ee/8c/83087ebc47ab0396ce092363001fa37c17153119ee282700c0713a195853/prettytable-3.17.0-py3-none-any.whl
   name: prettytable

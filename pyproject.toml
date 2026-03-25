@@ -75,6 +75,10 @@ yammbs = { git = "https://github.com/fjclark/yammbs", rev = "bbf11308ee7e3c75525
 openmmml = { git = "https://github.com/openmm/openmm-ml.git", rev = "e2b3ed8f630f6898ad4bf60603fe382f99479da5" }
 smirnoff-plugins = { git = "https://github.com/fjclark/smirnoff-plugins", rev = "fd4e8e71a0a2c710d662f6001cabc802a5097cf6" }
 deepchem = { version = ">=2.7.0", extras = ["jax"] } # Interferes with pytorch if ["torch"]
+# AIMNet Stuff
+aimnet = ">=0.1.0"
+# aimnet doesn't like more recent versions
+nvalchemi-toolkit-ops = "==0.2.0"
 
 [tool.pixi.feature.espaloma.dependencies]
 espaloma = ">=0.3.1"

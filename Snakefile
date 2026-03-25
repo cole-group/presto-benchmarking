@@ -196,11 +196,7 @@ checkpoint process_folmsbee_smiles:
         directory("benchmarking/folmsbee_conformers/input/test/smiles")
     shell:
         "pixi run -e default presto-benchmark process-folmsbee-smiles "
-        "{input.gh_repo}/SMILES/molecules.smi {output} && "
-        "find {output} -maxdepth 1 -type f -name '*.smi' "
-        "! -name 'omegapdb_1m5d.smi' "
-        "! -name 'omegapdb_1sa4.smi' "
-        "! -name 'omegacsd_VORJER.smi' -delete"
+        "{input.gh_repo}/SMILES/molecules.smi {output}"
 
 
 rule analyse_folmsbee_conformers:
