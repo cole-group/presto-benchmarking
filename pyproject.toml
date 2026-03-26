@@ -71,7 +71,7 @@ descent = { git = "https://github.com/openforcefield/descent", rev = "15101d021d
 presto = { git = "https://github.com/cole-group/presto.git", rev = "1aa5eb6c743fd6150dc127f943dce54471ead6ba"}
 # Use local presto install for development
 # presto = { path = "/home/campus.ncl.ac.uk/nfc78/software/devel/presto-clean/", editable = true }
-yammbs = { git = "https://github.com/fjclark/yammbs", rev = "bbf11308ee7e3c75525f827f98bfe4dadc8950ba" }
+yammbs = { git = "https://github.com/fjclark/yammbs", rev = "99a7414b6c4b70efa44a09aa117ff8f27f99022a" }
 openmmml = { git = "https://github.com/openmm/openmm-ml.git", rev = "e2b3ed8f630f6898ad4bf60603fe382f99479da5" }
 smirnoff-plugins = { git = "https://github.com/fjclark/smirnoff-plugins", rev = "fd4e8e71a0a2c710d662f6001cabc802a5097cf6" }
 deepchem = { version = ">=2.7.0", extras = ["jax"] } # Interferes with pytorch if ["torch"]
