@@ -376,6 +376,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/openjpeg-2.5.4-h55fea9a_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/openldap-2.6.10-he970967_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/openmm-8.5.0-py312h5a97af1_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/openmm-ml-1.6-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/openmmforcefields-0.15.1-pyhcf101f3_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/openssl-3.6.1-h35e630c_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/optree-0.19.0-py312hd9148b4_0.conda
@@ -609,7 +610,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/3c/ba/79020348dbdaa6786ff2162e11bc56095e0b949e8bb9813dee12ccc1f567/matscipy-1.2.0-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/3a/cb/28ce52eb94390dda42599c98ea0204d74799e4d8047a0eb559b6fd648056/ml_dtypes-0.5.4-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/63/97/9f57af74dd92fc5c0af6f8d5a7b8459c103e318d16f3d9dbd863826fccf8/nvalchemi_toolkit_ops-0.2.0-py3-none-any.whl
-      - pypi: git+https://github.com/openmm/openmm-ml.git?rev=e2b3ed8f630f6898ad4bf60603fe382f99479da5#e2b3ed8f630f6898ad4bf60603fe382f99479da5
       - pypi: https://files.pythonhosted.org/packages/23/cd/066e86230ae37ed0be70aae89aabf03ca8d9f39c8aea0dec8029455b5540/opt_einsum-3.4.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8d/4c/e0370709aaf9d7ceb68f975cac559751e75954429a77e83202e680606560/opt_einsum_fx-0.1.4-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8a/69/6a93d8600c339d7687a05857c7907bd4dd8cf88691a5ea106d7a50af90a1/optax-0.2.8-py3-none-any.whl
@@ -621,7 +621,7 @@ environments:
       - pypi: git+https://github.com/fjclark/smirnoff-plugins?rev=fd4e8e71a0a2c710d662f6001cabc802a5097cf6#fd4e8e71a0a2c710d662f6001cabc802a5097cf6
       - pypi: https://files.pythonhosted.org/packages/24/99/4772b8e00a136f3e01236de33b0efda31ee7077203ba5967fcc76da94d65/texttable-1.7.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c0/f1/a47c831436595cffbfd69a19ea129a23627120b13f4886499e58775329d1/torch_ema-0.3-py3-none-any.whl
-      - pypi: git+https://github.com/fjclark/yammbs?rev=bbf11308ee7e3c75525f827f98bfe4dadc8950ba#bbf11308ee7e3c75525f827f98bfe4dadc8950ba
+      - pypi: git+https://github.com/fjclark/yammbs?rev=0a8369d2b9f4b7419c4b6f1b6223ea6c3e723b11#0a8369d2b9f4b7419c4b6f1b6223ea6c3e723b11
       - pypi: ./
   espaloma:
     channels:
@@ -7563,6 +7563,20 @@ packages:
   - pkg:pypi/openmm?source=hash-mapping
   size: 14771378
   timestamp: 1774044586442
+- conda: https://conda.anaconda.org/conda-forge/noarch/openmm-ml-1.6-pyhd8ed1ab_0.conda
+  sha256: d6e919957de4b7cb1dcea1df209fad2177a6e7d1dc01ee5114a8c91b1b630485
+  md5: 92c30d972080475831a7212b6a7a207d
+  depends:
+  - numpy
+  - openmm >=8.5.0
+  - python >=3.10
+  - setuptools
+  license: MIT
+  license_family: MIT
+  purls:
+  - pkg:pypi/openmmml?source=hash-mapping
+  size: 27986
+  timestamp: 1774453047076
 - conda: https://conda.anaconda.org/conda-forge/noarch/openmmforcefields-0.15.1-pyhcf101f3_1.conda
   sha256: 4d44380af347fb46b4b7a3233dc1d5e17ead6c0bb848d80fc635e92e4af8123e
   md5: f9bafcf0a23cde6cd05efceb104f86a1
@@ -7591,12 +7605,6 @@ packages:
   - pkg:pypi/openmmforcefields?source=hash-mapping
   size: 3264682
   timestamp: 1770247309545
-- pypi: git+https://github.com/openmm/openmm-ml.git?rev=e2b3ed8f630f6898ad4bf60603fe382f99479da5#e2b3ed8f630f6898ad4bf60603fe382f99479da5
-  name: openmmml
-  version: '1.5'
-  requires_dist:
-  - numpy
-  - openmm>=8.4
 - conda: https://conda.anaconda.org/conda-forge/linux-64/openssl-3.6.1-h35e630c_1.conda
   sha256: 44c877f8af015332a5d12f5ff0fb20ca32f896526a7d0cdb30c769df1144fb5c
   md5: f61eb8cd60ff9057122a3d338b99c00f
@@ -8129,7 +8137,7 @@ packages:
 - pypi: ./
   name: presto-benchmark
   version: 0.1.0
-  sha256: 90e4aa111bd3c93c4a64af1f5623889967ac924cc7c0d117c7aed8cc3350dba4
+  sha256: a7292565d2f3b0654016ad1f9d6f1b03ed964c32d7df5dd2d9028f00fe3b976c
   requires_python: '>=3.12'
 - pypi: https://files.pythonhosted.org/packages/ee/8c/83087ebc47ab0396ce092363001fa37c17153119ee282700c0713a195853/prettytable-3.17.0-py3-none-any.whl
   name: prettytable
@@ -11062,9 +11070,9 @@ packages:
   purls: []
   size: 85189
   timestamp: 1753484064210
-- pypi: git+https://github.com/fjclark/yammbs?rev=bbf11308ee7e3c75525f827f98bfe4dadc8950ba#bbf11308ee7e3c75525f827f98bfe4dadc8950ba
+- pypi: git+https://github.com/fjclark/yammbs?rev=0a8369d2b9f4b7419c4b6f1b6223ea6c3e723b11#0a8369d2b9f4b7419c4b6f1b6223ea6c3e723b11
   name: yammbs
-  version: 0.0.1.dev475+gbbf11308e
+  version: 0.0.1.dev478+g0a8369d2b
   requires_python: '>=3.11'
 - conda: https://conda.anaconda.org/conda-forge/linux-64/yarl-1.23.0-py312h8a5da7c_0.conda
   sha256: 5d991a8f418675338528ea8097e55143ad833807a110c4251879040351e0d4af
