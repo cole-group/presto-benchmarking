@@ -60,6 +60,34 @@ def validation_force_fields(wildcards: Any) -> list[str]:
     )
 
 
+def smiles_csv_input(wildcards: Any) -> str:
+    """Resolve smiles.csv path for a dataset/split after the relevant checkpoint."""
+    dataset = wildcards.dataset
+
+    if dataset == "tnet500":
+        checkpoints.split_tnet500_input.get()
+        return f"benchmarking/{dataset}/input/{wildcards.dataset_type}/smiles.csv"
+
+    checkpoint_obj = getattr(checkpoints, f"split_{dataset}_input", None)
+    checkpoint_kwargs: dict = {}
+    if checkpoint_obj is None:
+        checkpoint_obj = checkpoints.split_test_only_input
+        checkpoint_kwargs = {"dataset": dataset}
+
+    checkpoint_obj.get(**checkpoint_kwargs)
+    return f"benchmarking/{dataset}/input/{wildcards.dataset_type}/smiles.csv"
+
+
+def smiles_descriptor_summary_input(wildcards: Any) -> list[str]:
+    """Return smiles descriptor summary dependency for datasets that produce smiles.csv."""
+    if wildcards.dataset == "folmsbee_conformers":
+        return []
+
+    return [
+        f"benchmarking/{wildcards.dataset}/input/{wildcards.dataset_type}/smiles_descriptor_summary.csv"
+    ]
+
+
 def qca_exclude_smiles_opts(dataset_name: str) -> str:
     """Return --exclude-smiles CLI flags for a QCA dataset, from workflow_config.yaml."""
     smiles = config.get("exclude_smiles", {}).get(dataset_name, [])
@@ -113,6 +141,9 @@ rule all:
         "benchmarking/tnet500/analysis/test/default/metrics.json",
         "benchmarking/tnet500/analysis/validation/ablations/metrics.json",
         "benchmarking/jacs_fragments/analysis/test/default/metrics.json",
+        # smiles.csv descriptor analysis aggregate
+        "benchmarking/analysis/smiles_descriptors/smiles_descriptor_aggregate_mean_std.csv",
+        "benchmarking/analysis/smiles_descriptors/smiles_descriptor_aggregate_mean_std.tex",
 
 
 ############ General Rules #############
@@ -147,10 +178,46 @@ checkpoint split_test_only_input:
 rule create_combined_force_field:
     input:
         force_fields=validation_force_fields,
+        descriptor_summary=smiles_descriptor_summary_input,
     output:
         "benchmarking/{dataset}/output/{dataset_type}/{config_name}/combined_force_field.offxml",
     shell:
         "pixi run -e default presto-benchmark combine-force-fields {output[0]} '{input.force_fields}'"
+
+
+rule analyse_smiles_descriptors:
+    input:
+        smiles_csv=smiles_csv_input,
+    output:
+        descriptor_csv="benchmarking/{dataset}/input/{dataset_type}/smiles_descriptors.csv",
+        descriptor_tex="benchmarking/{dataset}/input/{dataset_type}/smiles_descriptors.tex",
+        summary_csv="benchmarking/{dataset}/input/{dataset_type}/smiles_descriptor_summary.csv",
+        summary_tex="benchmarking/{dataset}/input/{dataset_type}/smiles_descriptor_summary.tex",
+        mean_std_csv="benchmarking/{dataset}/input/{dataset_type}/smiles_descriptor_mean_std.csv",
+        mean_std_tex="benchmarking/{dataset}/input/{dataset_type}/smiles_descriptor_mean_std.tex",
+        plots_dir=directory("benchmarking/{dataset}/input/{dataset_type}/smiles_descriptor_plots"),
+    wildcard_constraints:
+        dataset="tnet500|jacs_fragments|1mer_backbone|3mer_backbone|1mer_side_chain",
+        dataset_type="test|validation",
+    shell:
+        "pixi run -e default presto-benchmark analyse-smiles-descriptors {input.smiles_csv}"
+
+
+rule aggregate_smiles_descriptors:
+    input:
+        tnet500_test="benchmarking/tnet500/input/test/smiles_descriptor_summary.csv",
+        tnet500_validation="benchmarking/tnet500/input/validation/smiles_descriptor_summary.csv",
+        jacs_test="benchmarking/jacs_fragments/input/test/smiles_descriptor_summary.csv",
+    output:
+        aggregate_csv="benchmarking/analysis/smiles_descriptors/smiles_descriptor_aggregate_mean_std.csv",
+        aggregate_tex="benchmarking/analysis/smiles_descriptors/smiles_descriptor_aggregate_mean_std.tex",
+    params:
+        output_dir="benchmarking/analysis/smiles_descriptors",
+    shell:
+        "pixi run -e default presto-benchmark aggregate-smiles-descriptors {params.output_dir} "
+        "benchmarking/tnet500/input/test/smiles.csv "
+        "benchmarking/tnet500/input/validation/smiles.csv "
+        "benchmarking/jacs_fragments/input/test/smiles.csv"
 
 rule analyse_torsion_scans_yammbs:
     input:
@@ -162,8 +229,12 @@ rule analyse_torsion_scans_yammbs:
         plot_png="benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/plots/rmse.png",
         paired_stats_png="benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/plots/paired_stats.png",
         paired_stats_no_sig_png="benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/plots/paired_stats_no_sig.png",
+        fit_rmse_plot_png="benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/plots/presto_fit_validation_energy_rmse.png",
+        fit_rmse_summary_csv="benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/plots/presto_fit_validation_energy_rmse_summary.csv",
+        fit_rmse_summary_tex="benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/plots/presto_fit_validation_energy_rmse_summary.tex",
     params:
         analysis_dir=lambda wc: f"benchmarking/{wc.dataset}/analysis/{wc.dataset_type}/{wc.config_name}",
+        presto_output_dir=lambda wc: f"benchmarking/{wc.dataset}/output/{wc.dataset_type}/{wc.config_name}",
         base_ff_opts=lambda wc: " ".join(
             f"--base-force-field '{ff}'"
             for ff in yammbs_target_config(wc).get(
@@ -177,7 +248,10 @@ rule analyse_torsion_scans_yammbs:
     shell:
         "pixi run -e default presto-benchmark analyse-torsion-scans "
         "{input.qca_data_json} {input.combined_ff} {params.analysis_dir} "
-        "{params.base_ff_opts} {params.extra_ff_opts}"
+        "{params.base_ff_opts} {params.extra_ff_opts} && "
+        "pixi run -e default presto-benchmark analyse-presto-fits "
+        "{params.presto_output_dir} {params.analysis_dir}/plots "
+        "--random-seed {RANDOM_SEED}"
 
 
 ############ Folmsbee Conformers #############
@@ -292,8 +366,12 @@ rule analyse_tnet500_validation_ablations:
         plot_png="benchmarking/tnet500/analysis/validation/ablations/plots/rmse.png",
         heatmap_png="benchmarking/tnet500/analysis/validation/ablations/plots/heatmap.png",
         distributions_png="benchmarking/tnet500/analysis/validation/ablations/plots/distributions.png",
+        fit_rmse_plot_png="benchmarking/tnet500/analysis/validation/ablations/plots/presto_fit_validation_energy_rmse.png",
+        fit_rmse_summary_csv="benchmarking/tnet500/analysis/validation/ablations/plots/presto_fit_validation_energy_rmse_summary.csv",
+        fit_rmse_summary_tex="benchmarking/tnet500/analysis/validation/ablations/plots/presto_fit_validation_energy_rmse_summary.tex",
     params:
         analysis_dir="benchmarking/tnet500/analysis/validation/ablations",
+        presto_output_dir="benchmarking/tnet500/output/validation/default",
         base_ff_opts=" ".join(
             f"--base-force-field '{ff}'"
             for ff in config["yammbs_analysis"]["base_force_fields"]
@@ -306,6 +384,9 @@ rule analyse_tnet500_validation_ablations:
         "--extra-force-field '{input.no_min_ff}' "
         "--extra-force-field '{input.one_it_ff}' "
         "--extra-force-field '{input.no_metad_ff}' && "
+        "pixi run -e default presto-benchmark analyse-presto-fits "
+        "{params.presto_output_dir} {params.analysis_dir}/plots "
+        "--random-seed {RANDOM_SEED} && "
         "pixi run -e default presto-benchmark plot-ablation-comparison "
         "{output.metrics_json} {params.analysis_dir}/plots"
 

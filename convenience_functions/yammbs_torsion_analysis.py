@@ -404,9 +404,9 @@ def save_summary_table_latex(
     output_table: Path,
     ff_display_names: dict[str, str] | None = None,
     database_file: Path | None = None,
-    n_bootstrap: int = 2000,
+    n_bootstrap: int = 10_000,
     confidence_level: float = 95.0,
-    random_seed: int = 2026,
+    random_seed: int = 0,
 ) -> None:
     """Create and save the summary dataframe as a LaTeX table."""
     summary_df = create_summary_table(

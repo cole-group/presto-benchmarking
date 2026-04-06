@@ -206,6 +206,31 @@ def split_qca_input_cli(
     )
 
 
+@app.command("analyse-smiles-descriptors")
+def analyse_smiles_descriptors_cli(
+    smiles_csv_path: Path = typer.Argument(..., help="Path to smiles.csv file"),
+) -> None:
+    """Analyse molecular descriptors for one smiles.csv file."""
+    from convenience_functions.smiles_descriptor_analysis import analyse_smiles_file
+
+    analyse_smiles_file(smiles_csv_path=smiles_csv_path)
+
+
+@app.command("aggregate-smiles-descriptors")
+def aggregate_smiles_descriptors_cli(
+    output_dir: Path = typer.Argument(
+        ..., help="Directory to write aggregate descriptor summary"
+    ),
+    smiles_csv_paths: list[Path] = typer.Argument(
+        ..., help="Paths to smiles.csv files to analyse"
+    ),
+) -> None:
+    """Analyse multiple smiles.csv files and write aggregate statistics."""
+    from convenience_functions.smiles_descriptor_analysis import analyse_smiles_files
+
+    analyse_smiles_files(smiles_csv_paths=smiles_csv_paths, output_dir=output_dir)
+
+
 @app.command("minimise-protein-torsion")
 def minimise_protein_torsion_cli(
     input_file: Path = typer.Argument(..., help="Path to QCA data JSON file"),
@@ -381,6 +406,37 @@ def plot_ablation_comparison_cli(
     from convenience_functions.ablation_comparison import plot_ablation_comparison
 
     plot_ablation_comparison(metrics_json=metrics_json, output_dir=output_dir)
+
+
+@app.command("analyse-presto-fits")
+def analyse_presto_fits_cli(
+    presto_output_dir: Path = typer.Argument(
+        ..., help="Directory containing many PRESTO fit subdirectories"
+    ),
+    output_dir: Path = typer.Argument(..., help="Directory for analysis outputs"),
+    n_bootstrap: int = typer.Option(
+        10_000,
+        help="Number of bootstrap resamples for confidence intervals",
+    ),
+    confidence_level: float = typer.Option(
+        95.0,
+        help="Confidence interval level in percent",
+    ),
+    random_seed: int = typer.Option(
+        0,
+        help="Random seed for bootstrap resampling (default: 0)",
+    ),
+) -> None:
+    """Analyse PRESTO fits and summarize validation per-atom energy RMSE."""
+    from convenience_functions.presto_fitting_analysis import analyse_presto_fits
+
+    analyse_presto_fits(
+        presto_output_dir=presto_output_dir,
+        output_dir=output_dir,
+        n_bootstrap=n_bootstrap,
+        confidence_level=confidence_level,
+        random_seed=random_seed,
+    )
 
 
 if __name__ == "__main__":
