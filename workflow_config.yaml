@@ -67,7 +67,9 @@ folmsbee_analysis:
     - "mp2"
     - "wb97"
     - "ani2"
-  torsion_restraint_force_constant: 10000.0
+  mlp_names: ["aimnet2", "aceff-2.0"]
+  single_point_mlp: true
+  torsion_restraint_force_constant: 100000
   mm_minimization_steps: 0
   n_processes: null
   targets:
@@ -75,4 +77,4 @@ folmsbee_analysis:
       extra_force_fields:
         - "input_ff/openff_unconstrained-2.3.0.offxml"
         - "input_ff/esp04.offxml"
-        # - "input_ff/aceff20.offxml"
+

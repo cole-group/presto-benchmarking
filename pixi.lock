@@ -621,7 +621,7 @@ environments:
       - pypi: git+https://github.com/fjclark/smirnoff-plugins?rev=fd4e8e71a0a2c710d662f6001cabc802a5097cf6#fd4e8e71a0a2c710d662f6001cabc802a5097cf6
       - pypi: https://files.pythonhosted.org/packages/24/99/4772b8e00a136f3e01236de33b0efda31ee7077203ba5967fcc76da94d65/texttable-1.7.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c0/f1/a47c831436595cffbfd69a19ea129a23627120b13f4886499e58775329d1/torch_ema-0.3-py3-none-any.whl
-      - pypi: git+https://github.com/fjclark/yammbs?rev=0a8369d2b9f4b7419c4b6f1b6223ea6c3e723b11#0a8369d2b9f4b7419c4b6f1b6223ea6c3e723b11
+      - pypi: git+https://github.com/fjclark/yammbs?rev=607b515e8e9c5a30ecfb174a99ab65be2082206a#607b515e8e9c5a30ecfb174a99ab65be2082206a
       - pypi: ./
   espaloma:
     channels:
@@ -8137,7 +8137,7 @@ packages:
 - pypi: ./
   name: presto-benchmark
   version: 0.1.0
-  sha256: a7292565d2f3b0654016ad1f9d6f1b03ed964c32d7df5dd2d9028f00fe3b976c
+  sha256: bf180d0a52c9245af091b98757aaba64f30e90728f04221c6957d6f7d2f6e348
   requires_python: '>=3.12'
 - pypi: https://files.pythonhosted.org/packages/ee/8c/83087ebc47ab0396ce092363001fa37c17153119ee282700c0713a195853/prettytable-3.17.0-py3-none-any.whl
   name: prettytable
@@ -11070,9 +11070,9 @@ packages:
   purls: []
   size: 85189
   timestamp: 1753484064210
-- pypi: git+https://github.com/fjclark/yammbs?rev=0a8369d2b9f4b7419c4b6f1b6223ea6c3e723b11#0a8369d2b9f4b7419c4b6f1b6223ea6c3e723b11
+- pypi: git+https://github.com/fjclark/yammbs?rev=607b515e8e9c5a30ecfb174a99ab65be2082206a#607b515e8e9c5a30ecfb174a99ab65be2082206a
   name: yammbs
-  version: 0.0.1.dev478+g0a8369d2b
+  version: 0.0.1.dev479+g607b515e8
   requires_python: '>=3.11'
 - conda: https://conda.anaconda.org/conda-forge/linux-64/yarl-1.23.0-py312h8a5da7c_0.conda
   sha256: 5d991a8f418675338528ea8097e55143ad833807a110c4251879040351e0d4af

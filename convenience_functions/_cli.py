@@ -133,6 +133,19 @@ def analyse_folmsbee_cli(
         "--precomputed-method",
         help="Precomputed method column from data-final.csv (repeatable)",
     ),
+    mlp_names: list[str] = typer.Option(
+        [],
+        "--mlp-name",
+        help="OpenMM-ML potential name to evaluate (repeatable)",
+    ),
+    single_point_mlp: bool = typer.Option(
+        True,
+        "--single-point-mlp/--minimise-mlp",
+        help=(
+            "Evaluate MLPs as single points on input geometries (default), "
+            "or minimise with restraints when disabled"
+        ),
+    ),
     reference_method: str = typer.Option(
         "dlpno", help="Reference method column from data-final.csv"
     ),
@@ -160,6 +173,8 @@ def analyse_folmsbee_cli(
         output_dir=output_dir,
         force_field_paths=force_fields,
         precomputed_methods=precomputed_methods,
+        mlp_names=mlp_names,
+        single_point_mlp=single_point_mlp,
         reference_method=reference_method,
         torsion_restraint_force_constant=torsion_restraint_force_constant,
         mm_minimization_steps=mm_minimization_steps,

@@ -72,7 +72,7 @@ descent = { git = "https://github.com/openforcefield/descent", rev = "15101d021d
 presto = { git = "https://github.com/cole-group/presto.git", rev = "1aa5eb6c743fd6150dc127f943dce54471ead6ba"}
 # Use local presto install for development
 # presto = { path = "/home/campus.ncl.ac.uk/nfc78/software/devel/presto-clean/", editable = true }
-yammbs = { git = "https://github.com/fjclark/yammbs", rev = "0a8369d2b9f4b7419c4b6f1b6223ea6c3e723b11" }
+yammbs = { git = "https://github.com/fjclark/yammbs", rev = "607b515e8e9c5a30ecfb174a99ab65be2082206a" }
 smirnoff-plugins = { git = "https://github.com/fjclark/smirnoff-plugins", rev = "fd4e8e71a0a2c710d662f6001cabc802a5097cf6" }
 deepchem = { version = ">=2.7.0", extras = ["jax"] } # Interferes with pytorch if ["torch"]
 # AIMNet Stuff

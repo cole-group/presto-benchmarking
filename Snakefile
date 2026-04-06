@@ -215,6 +215,15 @@ rule analyse_folmsbee_conformers:
             f"--precomputed-method '{method}'"
             for method in config["folmsbee_analysis"]["precomputed_methods"]
         ),
+        mlp_opts=lambda wc: " ".join(
+            f"--mlp-name '{name}'"
+            for name in config["folmsbee_analysis"].get("mlp_names", [])
+        ),
+        mlp_mode_opt=lambda wc: (
+            "--single-point-mlp"
+            if config["folmsbee_analysis"].get("single_point_mlp", True)
+            else "--minimise-mlp"
+        ),
         extra_ff_opts=lambda wc: " ".join(
             f"--force-field '{ff}'"
             for ff in folmsbee_target_config(wc).get("extra_force_fields", [])
@@ -239,6 +248,8 @@ rule analyse_folmsbee_conformers:
         "--mm-minimization-steps {params.mm_minimization_steps} "
         "--force-field '{input.combined_ff}' "
         "{params.extra_ff_opts} "
+        "{params.mlp_opts} "
+        "{params.mlp_mode_opt} "
         "{params.precomputed_method_opts} "
         "{params.n_processes_opt}"
 
