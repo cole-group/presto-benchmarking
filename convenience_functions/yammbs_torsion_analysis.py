@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Literal
+from typing import Callable, Literal
 
 import numpy as np
 import pandas as pd
@@ -17,6 +17,7 @@ from convenience_functions._plotting_defaults import (
     METRIC_LABELS,
     METRIC_UNITS,
 )
+from yammbs.torsion.analysis import JSDistanceCollection, RMSECollection, RMSD, _normalize
 from yammbs.torsion import TorsionStore
 from yammbs.torsion.inputs import QCArchiveTorsionDataset
 from yammbs.torsion.outputs import MetricCollection
@@ -91,10 +92,336 @@ def analyse_torsion_scans(
     plot_paired_stats(
         output_metrics=output_metrics, plot_dir=plot_dir, show_significance=False
     )
+    save_summary_table_latex(
+        output_metrics=output_metrics,
+        output_table=plot_dir / "summary_metrics.tex",
+        database_file=database_file,
+    )
 
 
 def _get_rms(array: np.ndarray) -> float:
     return float(np.sqrt(np.mean(array**2)))
+
+def _get_mean(array: np.ndarray) -> float:
+    return float(np.mean(array))
+
+
+def _bootstrap_ci(
+    values: np.ndarray,
+    statistic: Callable[[np.ndarray], float],
+    n_bootstrap: int = 10_000,
+    confidence_level: float = 95.0,
+    random_seed: int = 0,
+) -> tuple[float, float]:
+    """Return a percentile bootstrap confidence interval for a 1D array."""
+    values = np.asarray(values, dtype=float)
+    if values.ndim != 1:
+        raise ValueError("values must be a 1D array")
+    if values.size == 0:
+        raise ValueError("values must contain at least one element")
+
+    rng = np.random.default_rng(random_seed)
+    bootstrap_stats = np.empty(n_bootstrap, dtype=float)
+    n_values = values.size
+    for i in range(n_bootstrap):
+        sample_idx = rng.integers(0, n_values, size=n_values)
+        bootstrap_stats[i] = statistic(values[sample_idx])
+
+    alpha = (100.0 - confidence_level) / 2.0
+    lower, upper = np.percentile(bootstrap_stats, [alpha, 100.0 - alpha])
+    return float(lower), float(upper)
+
+
+def _format_value_with_ci(value: float, ci: tuple[float, float], digits: int = 3) -> str:
+    """Format estimate and CI using LaTeX super/subscript notation."""
+    return f"${value:.{digits}f}_{{{ci[0]:.{digits}f}}}^{{{ci[1]:.{digits}f}}}$"
+
+
+def _format_header_with_units(metric_name: str, units: str) -> str:
+    """Build a two-line LaTeX column header with metric and units."""
+    return rf"\shortstack{{{metric_name} \\ / {units}}}"
+
+
+def _get_force_field_display(force_field: str, ff_display_names: dict[str, str]) -> str:
+    return ff_display_names.get(force_field, force_field)
+
+
+def _find_force_field_key(
+    available_force_fields: list[str],
+    ff_display_names: dict[str, str],
+    candidates: list[str],
+) -> str | None:
+    candidate_set = {candidate.lower() for candidate in candidates}
+
+    for force_field in available_force_fields:
+        if force_field.lower() in candidate_set:
+            return force_field
+
+    for force_field in available_force_fields:
+        display_name = ff_display_names.get(force_field, force_field)
+        if display_name.lower() in candidate_set:
+            return force_field
+
+    return None
+
+
+def _get_mm_vs_mm_metric_arrays(
+    database_file: Path,
+    target_force_field: str,
+    reference_force_field: str,
+    js_temperature: float,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Compute per-torsion RMSD, RMSE, and JS(target || reference) from MM outputs."""
+    from openff.toolkit import Molecule
+
+    store = TorsionStore(database_file)
+    torsion_ids = store.get_torsion_ids()
+
+    rmsd_values: list[float] = []
+    rmse_values: list[float] = []
+    js_values: list[float] = []
+
+    for torsion_id in torsion_ids:
+        reference_points = store.get_mm_points_by_torsion_id(
+            torsion_id=torsion_id,
+            force_field=reference_force_field,
+        )
+        target_points = store.get_mm_points_by_torsion_id(
+            torsion_id=torsion_id,
+            force_field=target_force_field,
+        )
+
+        reference_energies = store.get_mm_energies_by_torsion_id(
+            torsion_id=torsion_id,
+            force_field=reference_force_field,
+        )
+        target_energies = store.get_mm_energies_by_torsion_id(
+            torsion_id=torsion_id,
+            force_field=target_force_field,
+        )
+
+        if (
+            len(reference_points) == 0
+            or len(target_points) == 0
+            or len(reference_energies) == 0
+            or len(target_energies) == 0
+        ):
+            raise ValueError(f"Missing MM data for torsion ID {torsion_id}")
+
+        molecule = Molecule.from_mapped_smiles(
+            store.get_smiles_by_torsion_id(torsion_id),
+            allow_undefined_stereo=True,
+        )
+
+        rmsd_values.append(
+            float(
+                RMSD.from_data(
+                    torsion_id=torsion_id,
+                    molecule=molecule,
+                    qm_points=reference_points,
+                    mm_points=target_points,
+                ).rmsd
+            )
+        )
+
+        reference_norm, target_norm = _normalize(reference_energies, target_energies)
+        reference_array = np.fromiter(reference_norm.values(), dtype=float)
+        target_array = np.fromiter(target_norm.values(), dtype=float)
+
+        if len(reference_array) == 0 or len(target_array) == 0:
+            raise ValueError(f"Missing normalized energy data for torsion ID {torsion_id}")
+
+        rmse_values.append(
+            float(
+                RMSECollection.get_item_type().from_data(
+                    torsion_id=torsion_id,
+                    qm_energies=reference_array,
+                    mm_energies=target_array,
+                ).rmse
+            )
+        )
+        js_values.append(
+            float(
+                JSDistanceCollection.get_item_type().from_data(
+                    torsion_id=torsion_id,
+                    qm_energies=reference_array,
+                    mm_energies=target_array,
+                    temperature=js_temperature,
+                ).js_distance
+            )
+        )
+
+    return np.array(rmsd_values), np.array(rmse_values), np.array(js_values)
+
+
+def create_summary_table(
+    output_metrics: Path,
+    ff_display_names: dict[str, str] | None = None,
+    database_file: Path | None = None,
+    n_bootstrap: int = 10_000,
+    confidence_level: float = 95.0,
+    random_seed: int = 0,
+    presto_reference_candidates: tuple[str, ...] = ("AceFF 2.0", "aceff20", "aceff"),
+    presto_target_candidates: tuple[str, ...] = ("presto",),
+) -> pd.DataFrame:
+    """Create a summary dataframe with bootstrap CIs for selected metrics."""
+    metrics = MetricCollection.parse_file(output_metrics)
+    force_fields = list(metrics.metrics.keys())
+    ff_display = (
+        ff_display_names if ff_display_names is not None else FORCE_FIELD_DISPLAY_MAP
+    )
+
+    force_field_column = "Force Field / Reference"
+    rms_rmsd_column = _format_header_with_units("RMS RMSD", METRIC_UNITS["rmsd"])
+    rms_rmse_column = _format_header_with_units("RMS RMSE", METRIC_UNITS["rmse"])
+    rms_js_column = _format_header_with_units(
+        "RMS JS Distance",
+        METRIC_UNITS["js_distance"],
+    )
+
+    rows: list[dict[str, str | float]] = []
+    for force_field in force_fields:
+        ff_metrics = metrics.metrics[force_field]
+
+        rmsd_values = np.array([val.rmsd for val in ff_metrics.values()])
+        rmse_values = np.array([val.rmse for val in ff_metrics.values()])
+        js_values = np.array([val.js_distance[0] for val in ff_metrics.values()])
+
+        rms_rmsd = _get_rms(rmsd_values)
+        rms_rmse = _get_rms(rmse_values)
+        rms_js_distance = _get_rms(js_values)
+
+        rms_rmsd_ci = _bootstrap_ci(
+            rmsd_values,
+            statistic=_get_rms,
+            n_bootstrap=n_bootstrap,
+            confidence_level=confidence_level,
+            random_seed=random_seed,
+        )
+        rms_rmse_ci = _bootstrap_ci(
+            rmse_values,
+            statistic=_get_rms,
+            n_bootstrap=n_bootstrap,
+            confidence_level=confidence_level,
+            random_seed=random_seed,
+        )
+        rms_js_ci = _bootstrap_ci(
+            js_values,
+            statistic=_get_rms,
+            n_bootstrap=n_bootstrap,
+            confidence_level=confidence_level,
+            random_seed=random_seed,
+        )
+
+        rows.append(
+            {
+                force_field_column: (
+                    f"{_get_force_field_display(force_field, ff_display)} / DFT"
+                ),
+                rms_rmsd_column: _format_value_with_ci(rms_rmsd, rms_rmsd_ci),
+                rms_rmse_column: _format_value_with_ci(rms_rmse, rms_rmse_ci),
+                rms_js_column: _format_value_with_ci(rms_js_distance, rms_js_ci),
+                "_sort_rms_rmse": rms_rmse,
+            }
+        )
+
+    base_rows = sorted(
+        rows,
+        key=lambda row: float(row["_sort_rms_rmse"]),
+        reverse=True,
+    )
+
+    if database_file is not None:
+        presto_force_field = _find_force_field_key(
+            available_force_fields=force_fields,
+            ff_display_names=ff_display,
+            candidates=list(presto_target_candidates),
+        )
+        reference_force_field = _find_force_field_key(
+            available_force_fields=force_fields,
+            ff_display_names=ff_display,
+            candidates=list(presto_reference_candidates),
+        )
+
+        if presto_force_field is not None and reference_force_field is not None:
+            rmsd_values, rmse_values, js_values = _get_mm_vs_mm_metric_arrays(
+                database_file=database_file,
+                target_force_field=presto_force_field,
+                reference_force_field=reference_force_field,
+                js_temperature=500.0,
+            )
+
+            if len(rmse_values) > 0 and len(rmsd_values) > 0 and len(js_values) > 0:
+                rms_rmsd = _get_rms(rmsd_values)
+                rms_rmse = _get_rms(rmse_values)
+                rms_js_distance = _get_rms(js_values)
+
+                rms_rmsd_ci = _bootstrap_ci(
+                    rmsd_values,
+                    statistic=_get_rms,
+                    n_bootstrap=n_bootstrap,
+                    confidence_level=confidence_level,
+                    random_seed=random_seed,
+                )
+                rms_rmse_ci = _bootstrap_ci(
+                    rmse_values,
+                    statistic=_get_rms,
+                    n_bootstrap=n_bootstrap,
+                    confidence_level=confidence_level,
+                    random_seed=random_seed,
+                )
+                rms_js_ci = _bootstrap_ci(
+                    js_values,
+                    statistic=_get_rms,
+                    n_bootstrap=n_bootstrap,
+                    confidence_level=confidence_level,
+                    random_seed=random_seed,
+                )
+
+                base_rows.append(
+                    {
+                        force_field_column: (
+                            f"{_get_force_field_display(presto_force_field, ff_display)}"
+                            f" / {_get_force_field_display(reference_force_field, ff_display)}"
+                        ),
+                        rms_rmsd_column: _format_value_with_ci(rms_rmsd, rms_rmsd_ci),
+                        rms_rmse_column: _format_value_with_ci(rms_rmse, rms_rmse_ci),
+                        rms_js_column: _format_value_with_ci(
+                            rms_js_distance, rms_js_ci
+                        ),
+                    }
+                )
+
+    summary_df = pd.DataFrame(base_rows)
+    if "_sort_rms_rmse" in summary_df.columns:
+        summary_df = summary_df.drop(columns=["_sort_rms_rmse"])
+
+    return summary_df
+
+
+def save_summary_table_latex(
+    output_metrics: Path,
+    output_table: Path,
+    ff_display_names: dict[str, str] | None = None,
+    database_file: Path | None = None,
+    n_bootstrap: int = 2000,
+    confidence_level: float = 95.0,
+    random_seed: int = 2026,
+) -> None:
+    """Create and save the summary dataframe as a LaTeX table."""
+    summary_df = create_summary_table(
+        output_metrics=output_metrics,
+        ff_display_names=ff_display_names,
+        database_file=database_file,
+        n_bootstrap=n_bootstrap,
+        confidence_level=confidence_level,
+        random_seed=random_seed,
+    )
+
+    output_table.parent.mkdir(parents=True, exist_ok=True)
+    latex_table = summary_df.to_latex(index=False, escape=False)
+    with open(output_table, "w") as file_handle:
+        file_handle.write(latex_table)
 
 
 def plot_cdfs(output_metrics: Path, plot_dir: Path) -> None:

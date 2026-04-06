@@ -35,7 +35,7 @@ FORCE_FIELD_DISPLAY_MAP: dict[str, str] = {
 METRIC_LABELS: dict[str, str] = {
     "rmsd": "RMSD",
     "rmse": "RMSE",
-    "js_distance": "JSD (500 K)",
+    "js_distance": "$\sqrt{\mathrm{JSD}} (500 K)$",
 }
 
 # LaTeX unit strings for each raw metric key.
