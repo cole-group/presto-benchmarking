@@ -23,6 +23,16 @@ from openmm.app import Simulation
 from scipy import stats
 from statannotations.Annotator import Annotator
 from tqdm import tqdm
+from rdkit import Chem
+from rdkit.Chem import Draw
+
+from convenience_functions._stats import (
+    bootstrap_ci as _bootstrap_ci,
+    format_value_with_ci as _format_value_with_ci,
+    js_distance as _js_distance,
+    rmse as _get_rmse,
+    rms as _rms,
+)
 
 from presto.find_torsions import get_rot_torsions_by_rot_bond
 from presto.sample import (
@@ -47,6 +57,19 @@ _WORKER_PER_MOL_ROOT: str | None = None
 _WORKER_SINGLE_POINT_MLP: bool | None = None
 
 _PLOT_RMSE_MAX = 4.0
+_JSD_TEMPERATURE_K = 500.0
+
+_METHOD_DISPLAY_NAMES = {
+    "aimnet2": "AIMNet2",
+    "presto": "presto",
+    "espaloma": "espaloma 0.4.0",
+    "openff23": "OpenFF 2.3",
+    "ani2x": "ANI2x",
+    "mp2": "MP2",
+    "wb97": r"$\omega$ B97",
+}
+
+_SUMMARY_METHOD_ORDER = ["aimnet2", "presto", "espaloma", "openff23", "ani2x", "mp2", "wb97"]
 
 
 # ---------------------------------------------------------------------------
@@ -135,6 +158,84 @@ def _safe_relative(values: np.ndarray) -> np.ndarray:
     return values - np.mean(values)
 
 
+def _safe_relative_min(values: np.ndarray) -> np.ndarray:
+    values = np.asarray(values, dtype=float)
+    return values - np.min(values)
+
+
+def _method_key(method_name: str) -> str | None:
+    lower = method_name.lower()
+    if method_name.endswith("/combined_force_field.offxml"):
+        return "presto"
+    if "esp04" in lower or "espaloma" in lower:
+        return "espaloma"
+    if "openff_unconstrained-2.3.0" in lower or "sage" in lower:
+        return "openff23"
+    if lower in {"aimnet2", "mp2", "wb97"}:
+        return lower
+    if lower in {"ani2", "ani2x"}:
+        return "ani2x"
+    return None
+
+
+def _method_display_name(method_name: str) -> str:
+    key = _method_key(method_name)
+    if key is None:
+        return _method_label(method_name)
+    return _METHOD_DISPLAY_NAMES[key]
+
+
+def _find_method_column(method_names: Iterable[str], method_key: str) -> str | None:
+    for method_name in method_names:
+        if _method_key(method_name) == method_key:
+            return method_name
+    return None
+
+
+def _reference_windows(reference_df: pd.DataFrame, reference_method: str) -> pd.DataFrame:
+    required_cols = ["name", reference_method]
+    missing = [col for col in required_cols if col not in reference_df.columns]
+    if missing:
+        raise ValueError(f"Missing required columns for reference window calculation: {missing}")
+
+    window_df = (
+        reference_df.dropna(subset=required_cols)
+        .groupby("name", as_index=False)[reference_method]
+        .agg(ref_min="min", ref_max="max")
+    )
+    window_df["reference_energy_window_kcal_mol"] = window_df["ref_max"] - window_df["ref_min"]
+    return window_df.rename(columns={"name": "molecule"})
+
+
+def _calculate_core_metrics(reference: np.ndarray, method: np.ndarray) -> dict[str, float]:
+    ref_rel = _safe_relative(reference)
+    met_rel = _safe_relative(method)
+    ref_rel_js = _safe_relative_min(reference)
+    met_rel_js = _safe_relative_min(method)
+    return {
+        "rmse": _get_rmse(ref_rel, met_rel),
+        "jsd": _js_distance(met_rel_js, ref_rel_js, temperature=_JSD_TEMPERATURE_K),
+    }
+
+
+def _write_exclusion_report(path: Path, title: str, rows: list[str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text = [title, "", f"n_excluded={len(rows)}"]
+    if rows:
+        text.append("")
+        text.extend(rows)
+    path.write_text("\n".join(text))
+
+
+def _write_if_missing(path: Path, payload: str) -> bool:
+    if path.exists():
+        logger.info(f"Skipping existing output: {path}")
+        return False
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(payload)
+    return True
+
+
 # ---------------------------------------------------------------------------
 # Statistics helpers
 # ---------------------------------------------------------------------------
@@ -149,10 +250,6 @@ def _get_kendall_tau(x: np.ndarray, y: np.ndarray) -> float:
     if len(x) < 2:
         return float("nan")
     return float(stats.kendalltau(x, y).statistic)
-
-
-def _get_rmse(x: np.ndarray, y: np.ndarray) -> float:
-    return float(np.sqrt(np.mean((x - y) ** 2)))
 
 
 def _get_mae(x: np.ndarray, y: np.ndarray) -> float:
@@ -202,6 +299,90 @@ def _collect_presto_molecules(presto_output_dir: Path) -> set[str]:
     }
 
 
+def _load_smiles_by_molecule(folmsbee_repo_dir: Path) -> dict[str, str]:
+    smiles_file = folmsbee_repo_dir / "SMILES" / "molecules.smi"
+    if not smiles_file.exists():
+        raise FileNotFoundError(f"SMILES file not found: {smiles_file}")
+
+    smiles_map: dict[str, str] = {}
+    for line in smiles_file.read_text().splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        parts = stripped.split()
+        if len(parts) < 2:
+            raise ValueError(f"Malformed molecules.smi line: {line}")
+        smiles_map[parts[1]] = parts[0]
+    return smiles_map
+
+
+def _compile_smarts(smarts_patterns: list[str]) -> list[tuple[str, Chem.Mol]]:
+    compiled: list[tuple[str, Chem.Mol]] = []
+    for smarts in smarts_patterns:
+        patt = Chem.MolFromSmarts(smarts)
+        if patt is None:
+            raise ValueError(f"Invalid SMARTS pattern: {smarts}")
+        compiled.append((smarts, patt))
+    return compiled
+
+
+def _smarts_matches(smiles: str, compiled_patterns: list[tuple[str, Chem.Mol]]) -> list[str]:
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        raise ValueError(f"Invalid SMILES: {smiles}")
+    return [smarts for smarts, patt in compiled_patterns if mol.HasSubstructMatch(patt)]
+
+
+def _build_filter_reports(
+    reference_df: pd.DataFrame,
+    molecule_names_to_include: set[str],
+    smiles_by_molecule: dict[str, str],
+    exclude_smarts: list[str],
+    min_conformers_per_molecule: int,
+    min_reference_energy_window: float,
+    reference_method: str,
+) -> tuple[set[str], list[str], list[str], list[str]]:
+    candidate_molecules = sorted(molecule_names_to_include)
+    ref_subset = reference_df[reference_df["name"].isin(candidate_molecules)].copy()
+
+    conformer_counts = ref_subset.groupby("name", as_index=False).size().rename(columns={"size": "n_conformers"})
+    low_conformer_rows = conformer_counts[conformer_counts["n_conformers"] < min_conformers_per_molecule]
+    low_conformer_molecules = set(low_conformer_rows["name"].tolist())
+
+    ref_windows = _reference_windows(ref_subset, reference_method)
+    low_window_rows = ref_windows[ref_windows["reference_energy_window_kcal_mol"] < min_reference_energy_window]
+    low_window_molecules = set(low_window_rows["molecule"].tolist())
+
+    smarts_hits_rows: list[str] = []
+    smarts_molecules: set[str] = set()
+    compiled_smarts = _compile_smarts(exclude_smarts)
+    if compiled_smarts:
+        for molecule in candidate_molecules:
+            smiles = smiles_by_molecule.get(molecule)
+            if not smiles:
+                raise ValueError(
+                    "Missing SMILES for molecule while SMARTS filtering is enabled: "
+                    f"{molecule}"
+                )
+            matches = _smarts_matches(smiles, compiled_smarts)
+            if matches:
+                smarts_molecules.add(molecule)
+                smarts_hits_rows.append(f"{molecule}\t{smiles}\t{'; '.join(matches)}")
+
+    kept = set(candidate_molecules) - smarts_molecules - low_conformer_molecules - low_window_molecules
+
+    low_conformer_report = [
+        f"{row['name']}\tn_conformers={int(row['n_conformers'])}\tthreshold={min_conformers_per_molecule}"
+        for _, row in low_conformer_rows.sort_values("name").iterrows()
+    ]
+    low_window_report = [
+        f"{row['molecule']}\twindow_kcal_mol={float(row['reference_energy_window_kcal_mol']):.6f}\tthreshold={min_reference_energy_window:.6f}"
+        for _, row in low_window_rows.sort_values("molecule").iterrows()
+    ]
+
+    return kept, smarts_hits_rows, low_conformer_report, low_window_report
+
+
 def _write_minimized_conformer_sdf(
     template_molecule: Molecule,
     xyz_angstrom: np.ndarray,
@@ -238,6 +419,50 @@ def _cached_columns_complete(
 
 def _sdfs_complete(directory: Path, geometry_stems: list[str]) -> bool:
     return all((directory / f"{stem}.sdf").exists() for stem in geometry_stems)
+
+
+def _partition_cached_results_and_tasks(
+    tasks: list[tuple[str, list[str]]],
+    per_molecule_root: Path,
+    force_field_paths: list[str],
+    mlp_names: list[str],
+    single_point_mlp: bool,
+) -> tuple[dict[str, dict[str, dict]], list[tuple[str, list[str]]]]:
+    """Split tasks into fully cached molecules and molecules needing recompute."""
+    cached_results: dict[str, dict[str, dict]] = {}
+    tasks_to_compute: list[tuple[str, list[str]]] = []
+
+    mm_required_cols = [col for ff in force_field_paths for col in (ff, f"{ff}__rmsd_angstrom")]
+    mlp_required_cols = list(mlp_names)
+    if not single_point_mlp:
+        mlp_required_cols.extend(f"{mlp}__rmsd_angstrom" for mlp in mlp_names)
+
+    for molecule_name, geometries in tasks:
+        molecule_dir = per_molecule_root / molecule_name
+        mm_df = _load_cached_csv(molecule_dir / "mm_results.csv")
+        mlp_df = _load_cached_csv(molecule_dir / "mlp_results.csv")
+
+        mm_complete = True
+        if mm_required_cols:
+            mm_complete = mm_df is not None and _cached_columns_complete(mm_df, mm_required_cols, geometries)
+
+        mlp_complete = True
+        if mlp_required_cols:
+            mlp_complete = mlp_df is not None and _cached_columns_complete(mlp_df, mlp_required_cols, geometries)
+
+        if not (mm_complete and mlp_complete):
+            tasks_to_compute.append((molecule_name, geometries))
+            continue
+
+        cached_results[molecule_name] = _read_results_from_cache(
+            geometries=geometries,
+            ff_paths=force_field_paths,
+            mlp_names=mlp_names,
+            mm_df=mm_df,
+            mlp_df=mlp_df,
+        )
+
+    return cached_results, tasks_to_compute
 
 
 # ---------------------------------------------------------------------------
@@ -748,6 +973,9 @@ def _plot_correlation(
     reference_method: str,
     output_path: Path,
 ) -> None:
+    if output_path.exists():
+        logger.info(f"Skipping existing output: {output_path}")
+        return
     valid_df = molecule_df.dropna(subset=[reference_method])
     if len(valid_df) < 2:
         return
@@ -801,6 +1029,9 @@ def _plot_overall_metric_distribution(
     metric_column: str,
     output_path: Path,
 ) -> None:
+    if output_path.exists():
+        logger.info(f"Skipping existing output: {output_path}")
+        return
     if metric_column not in per_molecule_stats.columns or len(per_molecule_stats) == 0:
         return
 
@@ -858,6 +1089,9 @@ def _plot_rmse_vs_nonbonded_range(
     per_molecule_stats: pd.DataFrame,
     output_path: Path,
 ) -> None:
+    if output_path.exists():
+        logger.info(f"Skipping existing output: {output_path}")
+        return
     required = ["rmse_kcal_mol", "nonbonded_range_kcal_mol", "force_field"]
     fig, ax = plt.subplots(figsize=(8, 6))
 
@@ -895,6 +1129,9 @@ def _plot_relative_component_energies(
     method_names: list[str],
     output_path: Path,
 ) -> None:
+    if output_path.exists():
+        logger.info(f"Skipping existing output: {output_path}")
+        return
     if "geom" not in molecule_df.columns:
         return
 
@@ -951,6 +1188,451 @@ def _plot_relative_component_energies(
     plt.close(fig)
 
 
+def _build_ff_metric_dataframe(
+    results_df: pd.DataFrame,
+    per_molecule_stats_df: pd.DataFrame,
+    method_names: list[str],
+    reference_method: str,
+    smiles_by_molecule: dict[str, str],
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    rmse_lookup = (
+        per_molecule_stats_df[["molecule", "method", "rmse_kcal_mol"]]
+        .dropna(subset=["molecule", "method", "rmse_kcal_mol"])
+        .drop_duplicates(subset=["molecule", "method"], keep="last")
+        .set_index(["molecule", "method"])["rmse_kcal_mol"]
+    )
+    rmsd_lookup = (
+        per_molecule_stats_df[["molecule", "method", "rms_rmsd_angstrom"]]
+        .dropna(subset=["molecule", "method", "rms_rmsd_angstrom"])
+        .drop_duplicates(subset=["molecule", "method"], keep="last")
+        .set_index(["molecule", "method"])["rms_rmsd_angstrom"]
+        if "rms_rmsd_angstrom" in per_molecule_stats_df.columns
+        else pd.Series(dtype=float)
+    )
+
+    rows: list[dict] = []
+    presto_vs_aimnet2_rows: list[dict] = []
+    for molecule, group in results_df.groupby("name", sort=False):
+        for method_name in method_names:
+            method_key = _method_key(method_name)
+            if method_key is None:
+                continue
+            valid = group[[method_name, reference_method]].dropna()
+            if len(valid) < 2:
+                continue
+
+            metrics = _calculate_core_metrics(
+                reference=valid[reference_method].to_numpy(float),
+                method=valid[method_name].to_numpy(float),
+            )
+            rmse_precomputed = rmse_lookup.get((molecule, method_name), np.nan)
+            rmsd_precomputed = rmsd_lookup.get((molecule, method_name), np.nan)
+            rows.append(
+                {
+                    "molecule": molecule,
+                    "smiles": smiles_by_molecule.get(molecule),
+                    "force_field": method_key,
+                    "force_field_col": method_name,
+                    "rmse": float(rmse_precomputed) if np.isfinite(rmse_precomputed) else metrics["rmse"],
+                    "jsd": metrics["jsd"],
+                    "rmsd": float(rmsd_precomputed) if np.isfinite(rmsd_precomputed) else np.nan,
+                }
+            )
+
+        presto_col = _find_method_column(method_names, "presto")
+        aimnet2_col = _find_method_column(method_names, "aimnet2")
+        if presto_col is None or aimnet2_col is None:
+            continue
+        valid = group[[presto_col, aimnet2_col]].dropna()
+        if len(valid) < 2:
+            continue
+        metrics = _calculate_core_metrics(
+            reference=valid[aimnet2_col].to_numpy(float),
+            method=valid[presto_col].to_numpy(float),
+        )
+        presto_vs_aimnet2_rows.append(
+            {
+                "molecule": molecule,
+                "smiles": smiles_by_molecule.get(molecule),
+                "rmse": metrics["rmse"],
+                "jsd": metrics["jsd"],
+                "rmsd": np.nan,
+            }
+        )
+
+    ff_metric_df = pd.DataFrame(rows)
+    presto_vs_aimnet2_df = pd.DataFrame(presto_vs_aimnet2_rows)
+    return ff_metric_df, presto_vs_aimnet2_df
+
+
+def _save_figure_if_missing(fig: plt.Figure, output_path: Path) -> bool:
+    if output_path.exists():
+        logger.info(f"Skipping existing output: {output_path}")
+        plt.close(fig)
+        return False
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    return True
+
+
+def _paired_metric_dataframe(
+    ff_metric_df: pd.DataFrame,
+    metric_keys: list[str],
+    method_keys: list[str],
+) -> tuple[pd.DataFrame, dict[str, int], int]:
+    subset = ff_metric_df[ff_metric_df["force_field"].isin(method_keys)].copy()
+    count_by_method = (
+        subset.dropna(subset=["molecule", *metric_keys])
+        .groupby("force_field")
+        .agg(n_molecules=("molecule", "nunique"))
+        .to_dict()["n_molecules"]
+    )
+
+    pivoted: dict[str, pd.DataFrame] = {}
+    molecule_sets: list[set[str]] = []
+    for metric_key in metric_keys:
+        metric_pivot = subset.pivot_table(
+            index="molecule",
+            columns="force_field",
+            values=metric_key,
+            aggfunc="first",
+        )
+        missing_methods = [m for m in method_keys if m not in metric_pivot.columns]
+        if missing_methods:
+            raise ValueError(f"Missing methods for paired metric '{metric_key}': {missing_methods}")
+        metric_pivot = metric_pivot[method_keys].dropna()
+        pivoted[metric_key] = metric_pivot
+        molecule_sets.append(set(metric_pivot.index.tolist()))
+
+    overlap = set.intersection(*molecule_sets) if molecule_sets else set()
+    if not overlap:
+        raise ValueError("No overlapping molecules available for paired analysis")
+
+    frames: list[pd.DataFrame] = []
+    ordered_overlap = sorted(overlap)
+    for metric_key in metric_keys:
+        frame = pivoted[metric_key].loc[ordered_overlap].reset_index().melt(
+            id_vars="molecule",
+            var_name="force_field",
+            value_name=metric_key,
+        )
+        frames.append(frame)
+
+    paired_df = frames[0]
+    for frame in frames[1:]:
+        paired_df = paired_df.merge(frame, on=["molecule", "force_field"], how="inner")
+    return paired_df, {k: int(v) for k, v in count_by_method.items()}, len(overlap)
+
+
+def _plot_violin_with_significance(
+    ff_metric_df: pd.DataFrame,
+    output_path: Path,
+    method_order: list[str],
+) -> None:
+    metric_column = "rmse"
+    plot_df = ff_metric_df.dropna(subset=[metric_column]).copy()
+    plot_df["force_field_display"] = plot_df["force_field"].map(_METHOD_DISPLAY_NAMES)
+    order = [_METHOD_DISPLAY_NAMES[m] for m in method_order if m in plot_df["force_field"].unique()]
+    fig, ax = plt.subplots(figsize=(10, 6))
+    sns.violinplot(data=plot_df, x="force_field_display", y=metric_column, order=order, ax=ax, palette="Set2")
+    sns.swarmplot(
+        data=plot_df,
+        x="force_field_display",
+        y=metric_column,
+        order=order,
+        color="k",
+        alpha=0.45,
+        size=1.75,
+        ax=ax,
+    )
+
+    candidate_pairs = [
+        ("presto", "espaloma"),
+        ("presto", "openff23"),
+        ("presto", "aimnet2"),
+    ]
+    pivot = plot_df.pivot(index="molecule", columns="force_field", values=metric_column)
+    valid_pairs: list[tuple[str, str]] = []
+    p_values: list[float] = []
+    for left, right in candidate_pairs:
+        if left not in pivot.columns or right not in pivot.columns:
+            continue
+        pair_df = pivot[[left, right]].dropna()
+        if len(pair_df) == 0:
+            continue
+        n = len(pair_df)
+        n_pos = int(np.sum(pair_df[left].to_numpy() < pair_df[right].to_numpy()))
+        valid_pairs.append((_METHOD_DISPLAY_NAMES[left], _METHOD_DISPLAY_NAMES[right]))
+        p_values.append(float(binomtest(n_pos, n, 0.5).pvalue))
+
+    if valid_pairs:
+        annotator = Annotator(
+            ax,
+            valid_pairs,
+            data=plot_df,
+            x="force_field_display",
+            y=metric_column,
+            order=order,
+        )
+        annotator.configure(test=None, text_format="star", loc="inside")
+        annotator.set_pvalues(p_values)
+        annotator.annotate()
+
+    ax.set_xlabel("Method")
+    ax.set_ylabel(r"RMSE to QM / kcal mol$^{-1}$")
+    ax.tick_params(axis="x", rotation=15)
+    fig.tight_layout()
+    _save_figure_if_missing(fig, output_path)
+
+
+def _plot_paired_metrics_vs_qm(
+    paired_df: pd.DataFrame,
+    method_order: list[str],
+    output_path: Path,
+) -> None:
+    metric_specs = [
+        ("rmse", r"RMSE to QM / kcal mol$^{-1}$"),
+        ("jsd", "JS Distance to QM (500 K)"),
+    ]
+    fig, axes = plt.subplots(1, len(metric_specs), figsize=(14, 4.5), sharex=True)
+
+    display_order = [_METHOD_DISPLAY_NAMES[m] for m in method_order]
+    paired_df = paired_df.copy()
+    paired_df["force_field_display"] = paired_df["force_field"].map(_METHOD_DISPLAY_NAMES)
+
+    x_positions = {name: i for i, name in enumerate(display_order)}
+    for ax, (metric_key, ylabel) in zip(axes, metric_specs):
+        for molecule, group in paired_df.groupby("molecule"):
+            x = [x_positions[_METHOD_DISPLAY_NAMES[k]] for k in method_order]
+            y = [
+                group.loc[group["force_field"] == k, metric_key].iloc[0]
+                for k in method_order
+            ]
+            ax.plot(x, y, color="0.7", linewidth=0.7, alpha=0.35, zorder=1)
+
+        for method_key in method_order:
+            y = paired_df.loc[paired_df["force_field"] == method_key, metric_key].to_numpy(float)
+            x = np.full_like(y, fill_value=x_positions[_METHOD_DISPLAY_NAMES[method_key]], dtype=float)
+            ax.scatter(x, y, s=10, alpha=0.6, edgecolors="black", linewidths=0.2, zorder=2)
+
+        ax.set_xticks(range(len(display_order)))
+        ax.set_xticklabels(display_order, rotation=15)
+        ax.set_ylabel(ylabel)
+        ax.set_xlabel("Method")
+        ax.grid(alpha=0.25)
+
+    fig.suptitle("Paired Per-Molecule Metrics vs QM", y=1.03)
+    fig.tight_layout()
+    _save_figure_if_missing(fig, output_path)
+
+
+def _save_summary_table_latex(
+    ff_metric_df: pd.DataFrame,
+    presto_vs_aimnet2_df: pd.DataFrame,
+    method_order: list[str],
+    output_path: Path,
+) -> pd.DataFrame:
+    rows: list[dict[str, object]] = []
+    for method_key in method_order:
+        sub = ff_metric_df[ff_metric_df["force_field"] == method_key]
+        if sub.empty:
+            continue
+        rmse_vals = sub["rmse"].to_numpy(float)
+        jsd_vals = sub["jsd"].to_numpy(float)
+        rmsd_vals = sub["rmsd"].dropna().to_numpy(float)
+        row = {
+            "Comparison": f"{_METHOD_DISPLAY_NAMES[method_key]} / QM",
+            "N": int(sub["molecule"].nunique()),
+            "RMS RMSE / kcal mol$^{-1}$": _format_value_with_ci(
+                _rms(rmse_vals),
+                _bootstrap_ci(rmse_vals, _rms),
+            ),
+            "RMS JS Distance (500 K)": _format_value_with_ci(
+                _rms(jsd_vals),
+                _bootstrap_ci(jsd_vals, _rms),
+            ),
+            "RMS RMSD / $\\AA$": (
+                _format_value_with_ci(_rms(rmsd_vals), _bootstrap_ci(rmsd_vals, _rms))
+                if len(rmsd_vals) > 0
+                else "NA"
+            ),
+        }
+        rows.append(row)
+
+    if len(presto_vs_aimnet2_df) > 0:
+        rows.append(
+            {
+                "Comparison": "presto / AIMNet2",
+                "N": int(presto_vs_aimnet2_df["molecule"].nunique()),
+                "RMS RMSE / kcal mol$^{-1}$": _format_value_with_ci(
+                    _rms(presto_vs_aimnet2_df["rmse"].to_numpy(float)),
+                    _bootstrap_ci(presto_vs_aimnet2_df["rmse"].to_numpy(float), _rms),
+                ),
+                "RMS JS Distance (500 K)": _format_value_with_ci(
+                    _rms(presto_vs_aimnet2_df["jsd"].to_numpy(float)),
+                    _bootstrap_ci(presto_vs_aimnet2_df["jsd"].to_numpy(float), _rms),
+                ),
+                "RMS RMSD / $\\AA$": "NA",
+            }
+        )
+
+    summary_df = pd.DataFrame(rows)
+    sortable = summary_df[summary_df["Comparison"] != "presto / AIMNet2"].copy()
+    sortable["_sort_key"] = sortable["RMS RMSE / kcal mol$^{-1}$"].str.extract(r"\$([0-9.]+)")[0].astype(float)
+    sortable = sortable.sort_values("_sort_key", ascending=False).drop(columns=["_sort_key"])
+    remainder = summary_df[summary_df["Comparison"] == "presto / AIMNet2"]
+    summary_df = pd.concat([sortable, remainder], ignore_index=True)
+
+    if not output_path.exists():
+        output_path.write_text(summary_df.to_latex(index=False, escape=False))
+    else:
+        logger.info(f"Skipping existing output: {output_path}")
+    return summary_df
+
+
+def _save_outlier_tables_and_grid(
+    ff_metric_df: pd.DataFrame,
+    output_dir: Path,
+    top_n: int = 20,
+) -> None:
+    presto_df = ff_metric_df[ff_metric_df["force_field"] == "presto"][["molecule", "smiles", "rmse"]].rename(
+        columns={"rmse": "presto_rmse_to_qm_kcal_mol"}
+    )
+    openff_df = ff_metric_df[ff_metric_df["force_field"] == "openff23"][["molecule", "rmse"]].rename(
+        columns={"rmse": "openff23_rmse_to_qm_kcal_mol"}
+    )
+    merged = presto_df.merge(openff_df, on="molecule", how="inner")
+    merged["delta_presto_minus_openff23_kcal_mol"] = (
+        merged["presto_rmse_to_qm_kcal_mol"] - merged["openff23_rmse_to_qm_kcal_mol"]
+    )
+
+    worst_presto = merged.sort_values("presto_rmse_to_qm_kcal_mol", ascending=False).head(top_n)
+    worst_worsening = merged.sort_values("delta_presto_minus_openff23_kcal_mol", ascending=False).head(top_n)
+
+    _write_if_missing(
+        output_dir / "worst_presto_outliers_top20.txt",
+        worst_presto[["molecule", "smiles", "presto_rmse_to_qm_kcal_mol"]].to_string(index=False),
+    )
+    _write_if_missing(
+        output_dir / "largest_presto_worsening_vs_openff23_top20.txt",
+        worst_worsening[
+            [
+                "molecule",
+                "smiles",
+                "presto_rmse_to_qm_kcal_mol",
+                "openff23_rmse_to_qm_kcal_mol",
+                "delta_presto_minus_openff23_kcal_mol",
+            ]
+        ].to_string(index=False),
+    )
+
+    grid_path_png = output_dir / "worst_presto_outliers_grid.png"
+    if grid_path_png.exists() or (output_dir / "worst_presto_outliers_grid.svg").exists():
+        logger.info("Skipping existing outlier grid image")
+        return
+
+    mols: list[Chem.Mol] = []
+    legends: list[str] = []
+    for _, row in worst_presto.dropna(subset=["smiles"]).iterrows():
+        mol = Chem.MolFromSmiles(str(row["smiles"]))
+        if mol is None:
+            continue
+        mols.append(mol)
+        legends.append(
+            f"{row['molecule']}\\nRMSE: {float(row['presto_rmse_to_qm_kcal_mol']):.2f} kcal/mol"
+        )
+
+    if not mols:
+        raise ValueError("No valid molecules available for worst PRESTO outlier grid image")
+
+    grid_img = Draw.MolsToGridImage(mols, legends=legends, molsPerRow=4, subImgSize=(300, 250))
+    if not hasattr(grid_img, "save"):
+        raise TypeError(
+            f"Expected Draw.MolsToGridImage to return a PIL-like image with .save(), got {type(grid_img)}"
+        )
+    grid_img.save(str(grid_path_png))
+
+
+def _plot_paired_rmse_vs_reference_window(
+    ff_metric_df: pd.DataFrame,
+    ref_window_df: pd.DataFrame,
+    left_method: str,
+    right_method: str,
+    output_path: Path,
+) -> None:
+    if output_path.exists():
+        logger.info(f"Skipping existing output: {output_path}")
+        return
+
+    pair_df = (
+        ff_metric_df[ff_metric_df["force_field"].isin([left_method, right_method])]
+        [["molecule", "force_field", "rmse"]]
+        .pivot_table(index="molecule", columns="force_field", values="rmse", aggfunc="first")
+    )
+    missing = [m for m in [left_method, right_method] if m not in pair_df.columns]
+    if missing:
+        raise ValueError(f"Cannot create paired RMSE-vs-window plot; missing methods: {missing}")
+
+    pair_df = pair_df[[left_method, right_method]].dropna().reset_index()
+    if len(pair_df) == 0:
+        raise ValueError(
+            f"No overlap for paired RMSE-vs-window plot: {left_method} vs {right_method}"
+        )
+
+    plot_df = pair_df.merge(
+        ref_window_df[["molecule", "reference_energy_window_kcal_mol"]],
+        on="molecule",
+        how="inner",
+    ).dropna(subset=["reference_energy_window_kcal_mol", left_method, right_method])
+    if len(plot_df) == 0:
+        raise ValueError(
+            "No overlap between paired RMSE data and reference energy-window values"
+        )
+
+    fig, ax = plt.subplots(figsize=(7.2, 5.2))
+    colors = np.where(
+        plot_df[left_method] < plot_df[right_method],
+        "#2ca02c",
+        np.where(plot_df[left_method] > plot_df[right_method], "#d62728", "#7f7f7f"),
+    )
+    for i, row in plot_df.iterrows():
+        x = float(row["reference_energy_window_kcal_mol"])
+        ax.plot([x, x], [float(row[right_method]), float(row[left_method])], color=colors[i], alpha=0.55, linewidth=1.0)
+
+    ax.scatter(
+        plot_df["reference_energy_window_kcal_mol"],
+        plot_df[right_method],
+        color="#ff7f0e",
+        edgecolors="black",
+        linewidths=0.25,
+        s=12,
+        alpha=0.85,
+        label=_METHOD_DISPLAY_NAMES[right_method],
+    )
+    ax.scatter(
+        plot_df["reference_energy_window_kcal_mol"],
+        plot_df[left_method],
+        color="#1f77b4",
+        edgecolors="black",
+        linewidths=0.25,
+        s=12,
+        alpha=0.85,
+        label=_METHOD_DISPLAY_NAMES[left_method],
+    )
+
+    ax.set_xscale("log")
+    ax.set_xlabel("Reference Energy Window (max-min) / kcal mol$^{-1}$")
+    ax.set_ylabel("RMSE to QM / kcal mol$^{-1}$")
+    ax.set_title(
+        f"RMSE vs Reference Energy Window: {_METHOD_DISPLAY_NAMES[left_method]} vs {_METHOD_DISPLAY_NAMES[right_method]}"
+    )
+    ax.grid(alpha=0.25)
+    ax.legend(frameon=True, loc="upper left")
+    fig.tight_layout()
+    _save_figure_if_missing(fig, output_path)
+
+
 # ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
@@ -967,6 +1649,9 @@ def analyse_folmsbee(
     torsion_restraint_force_constant: float = 10_000.0,
     mm_minimization_steps: int = 0,
     n_processes: int | None = None,
+    exclude_smarts: list[str] | None = None,
+    min_conformers_per_molecule: int = 5,
+    min_reference_energy_window: float = 0.0,
 ) -> None:
     """Evaluate and compare conformer energies from the Folmsbee/Hutchison benchmark.
 
@@ -1004,6 +1689,7 @@ def analyse_folmsbee(
         Worker processes for parallelism.  Defaults to ``cpu_count - 1``.
     """
     mlp_names = mlp_names or []
+    exclude_smarts = exclude_smarts or []
 
     output_dir.mkdir(parents=True, exist_ok=True)
     plot_dir = output_dir / "plots"
@@ -1030,8 +1716,45 @@ def analyse_folmsbee(
     molecule_geometry_dirs = {
         k: str(v) for k, v in _resolve_molecule_geometry_dirs(folmsbee_repo_dir).items()
     }
-    molecule_names_to_include = _collect_presto_molecules(presto_output_dir)
-    logger.info(f"Loaded {len(molecule_names_to_include)} molecules from PRESTO output")
+    presto_molecule_names = _collect_presto_molecules(presto_output_dir)
+    logger.info(f"Loaded {len(presto_molecule_names)} molecules from PRESTO output")
+
+    smiles_by_molecule = _load_smiles_by_molecule(folmsbee_repo_dir)
+    (
+        molecule_names_to_include,
+        smarts_excluded_rows,
+        low_conformer_rows,
+        low_window_rows,
+    ) = _build_filter_reports(
+        reference_df=reference_df,
+        molecule_names_to_include=presto_molecule_names,
+        smiles_by_molecule=smiles_by_molecule,
+        exclude_smarts=exclude_smarts,
+        min_conformers_per_molecule=min_conformers_per_molecule,
+        min_reference_energy_window=min_reference_energy_window,
+        reference_method=reference_method,
+    )
+
+    _write_exclusion_report(
+        output_dir / "excluded_by_smarts.txt",
+        "Excluded molecules by SMARTS match",
+        smarts_excluded_rows,
+    )
+    _write_exclusion_report(
+        output_dir / "excluded_by_min_conformers.txt",
+        "Excluded molecules by minimum conformer threshold",
+        low_conformer_rows,
+    )
+    _write_exclusion_report(
+        output_dir / "excluded_by_min_reference_energy_window.txt",
+        "Excluded molecules by minimum reference energy-window threshold",
+        low_window_rows,
+    )
+
+    if not molecule_names_to_include:
+        raise ValueError("All molecules were excluded by pre-analysis filters")
+
+    logger.info(f"Molecules kept after filtering: {len(molecule_names_to_include)}")
 
     included_df = reference_df[reference_df["name"].isin(molecule_names_to_include)]
     tasks = [
@@ -1053,33 +1776,23 @@ def analyse_folmsbee(
         single_point_mlp,
     )
 
-    pool = None
-    if mlp_names:
-        # MLP/OpenMM-ML stacks can retain substantial GPU/host memory across
-        # tasks. Use spawned workers and recycle each worker after one task to
-        # keep memory bounded.
-        ctx = mp.get_context("spawn")
-        pool = ctx.Pool(
-            processes=n_processes,
-            initializer=_initialise_worker,
-            initargs=init_args,
-            maxtasksperchild=1,
-        )
-        results_iter: Iterable = pool.imap(_process_molecule_worker, tasks)
-    elif n_processes == 1:
-        _initialise_worker(*init_args)
-        results_iter = map(_process_molecule_worker, tasks)
-    else:
-        pool = mp.Pool(
-            processes=n_processes,
-            initializer=_initialise_worker,
-            initargs=init_args,
-        )
-        results_iter = pool.imap(_process_molecule_worker, tasks)
+    cached_results, tasks_to_compute = _partition_cached_results_and_tasks(
+        tasks=tasks,
+        per_molecule_root=per_molecule_root,
+        force_field_paths=force_field_paths,
+        mlp_names=mlp_names,
+        single_point_mlp=single_point_mlp,
+    )
 
-    try:
+    if cached_results:
+        logger.info(
+            f"Loaded cached per-molecule CSVs for {len(cached_results)}/{len(tasks)} molecules"
+        )
         for molecule_name, geom_results in tqdm(
-            results_iter, total=len(tasks), desc="Evaluating conformers", unit="mol"
+            cached_results.items(),
+            total=len(cached_results),
+            desc="Reading cached conformers",
+            unit="mol",
         ):
             mol_mask = reference_df["name"] == molecule_name
             for geometry, values in geom_results.items():
@@ -1090,10 +1803,57 @@ def analyse_folmsbee(
                 for key, value in values.items():
                     if key != "geom":
                         reference_df.loc[idx, key] = value
-    finally:
-        if pool is not None:
-            pool.close()
-            pool.join()
+
+    if tasks_to_compute:
+        logger.info(
+            f"Computing per-molecule results for {len(tasks_to_compute)}/{len(tasks)} molecules with missing cache"
+        )
+        pool = None
+        if mlp_names:
+            # MLP/OpenMM-ML stacks can retain substantial GPU/host memory across
+            # tasks. Use spawned workers and recycle each worker after one task to
+            # keep memory bounded.
+            ctx = mp.get_context("spawn")
+            pool = ctx.Pool(
+                processes=n_processes,
+                initializer=_initialise_worker,
+                initargs=init_args,
+                maxtasksperchild=1,
+            )
+            results_iter: Iterable = pool.imap(_process_molecule_worker, tasks_to_compute)
+        elif n_processes == 1:
+            _initialise_worker(*init_args)
+            results_iter = map(_process_molecule_worker, tasks_to_compute)
+        else:
+            pool = mp.Pool(
+                processes=n_processes,
+                initializer=_initialise_worker,
+                initargs=init_args,
+            )
+            results_iter = pool.imap(_process_molecule_worker, tasks_to_compute)
+
+        try:
+            for molecule_name, geom_results in tqdm(
+                results_iter,
+                total=len(tasks_to_compute),
+                desc="Evaluating conformers",
+                unit="mol",
+            ):
+                mol_mask = reference_df["name"] == molecule_name
+                for geometry, values in geom_results.items():
+                    row_mask = mol_mask & (reference_df["geom"] == geometry)
+                    if not row_mask.any():
+                        continue
+                    idx = reference_df[row_mask].index
+                    for key, value in values.items():
+                        if key != "geom":
+                            reference_df.loc[idx, key] = value
+        finally:
+            if pool is not None:
+                pool.close()
+                pool.join()
+    else:
+        logger.info("All molecules have complete cached CSVs; skipping MM/MLP evaluation")
 
     # ---- Per-molecule stats and plots ------------------------------------
     method_names = [*precomputed_methods, *force_field_paths, *mlp_names]
@@ -1117,12 +1877,17 @@ def analyse_folmsbee(
                 filtered[reference_method].to_numpy(float),
                 filtered[method_name].to_numpy(float),
             )
+            core = _calculate_core_metrics(
+                reference=filtered[reference_method].to_numpy(float),
+                method=filtered[method_name].to_numpy(float),
+            )
             row: dict = {
                 "molecule": molecule_name,
                 "method": method_name,
                 "n_conformers": len(filtered),
                 **{k: st[k] for k in ("r2", "kendall_tau")},
-                "rmse_kcal_mol": st["rmse"],
+                "rmse_kcal_mol": core["rmse"],
+                "js_distance_500k": core["jsd"],
                 "mae_kcal_mol": st["mae"],
             }
 
@@ -1185,12 +1950,14 @@ def analyse_folmsbee(
         ref_all = np.concatenate(per_mol_ref)
         met_all = np.concatenate(per_mol_method)
         st = _calculate_stats(ref_all, met_all)
+        core = _calculate_core_metrics(reference=ref_all, method=met_all)
         agg_row: dict = {
             "method": method_name,
             "n_conformers": len(ref_all),
             "n_molecules": len(per_mol_ref),
             **{k: st[k] for k in ("r2", "kendall_tau")},
-            "rmse_kcal_mol": st["rmse"],
+            "rmse_kcal_mol": core["rmse"],
+            "js_distance_500k": core["jsd"],
             "mae_kcal_mol": st["mae"],
         }
         rmsd_col = f"{method_name}__rmsd_angstrom"
@@ -1221,5 +1988,94 @@ def analyse_folmsbee(
     _plot_overall_metric_distribution(per_molecule_stats_df, "mean_rmsd_angstrom",
                                       plot_dir / "overall_rmsd_distribution.png")
     _plot_rmse_vs_nonbonded_range(per_molecule_stats_df, plot_dir / "rmse_vs_nonbonded_range.png")
+
+    # ---- Detailed post-analysis artifacts -------------------------------
+    ff_metric_df, presto_vs_aimnet2_df = _build_ff_metric_dataframe(
+        results_df=included_results_df,
+        per_molecule_stats_df=per_molecule_stats_df,
+        method_names=method_names,
+        reference_method=reference_method,
+        smiles_by_molecule=smiles_by_molecule,
+    )
+
+    detailed_method_order = [
+        m
+        for m in _SUMMARY_METHOD_ORDER
+        if m in set(ff_metric_df["force_field"].unique())
+    ]
+    missing_required = [m for m in _SUMMARY_METHOD_ORDER if m not in detailed_method_order]
+    if missing_required:
+        raise ValueError(
+            "Missing required methods for detailed analysis: "
+            + ", ".join(missing_required)
+        )
+
+    method_count_lines = ["Molecule counts by method"]
+    for method_key in detailed_method_order:
+        n_method = int(
+            ff_metric_df[ff_metric_df["force_field"] == method_key]["molecule"].nunique()
+        )
+        method_count_lines.append(f"{_METHOD_DISPLAY_NAMES[method_key]}\tN={n_method}")
+    _write_if_missing(output_dir / "method_molecule_counts.txt", "\n".join(method_count_lines))
+
+    _plot_violin_with_significance(
+        ff_metric_df=ff_metric_df,
+        output_path=plot_dir / "overall_rmse_violin_with_significance.png",
+        method_order=detailed_method_order,
+    )
+
+    paired_df, paired_counts, paired_overlap_n = _paired_metric_dataframe(
+        ff_metric_df=ff_metric_df,
+        metric_keys=["rmse", "jsd"],
+        method_keys=detailed_method_order,
+    )
+    _write_if_missing(
+        output_dir / "paired_method_molecule_counts.txt",
+        "\n".join(
+            [
+                "Molecule counts for paired analysis",
+                f"global_exact_overlap_N={paired_overlap_n}",
+            ]
+            + [
+                f"{_METHOD_DISPLAY_NAMES[k]}\tavailable_N={paired_counts.get(k, 0)}\tpaired_N={paired_overlap_n}"
+                for k in detailed_method_order
+            ]
+        ),
+    )
+
+    _plot_paired_metrics_vs_qm(
+        paired_df=paired_df,
+        method_order=detailed_method_order,
+        output_path=plot_dir / "paired_stats_vs_qm_dlpno.png",
+    )
+
+    _save_summary_table_latex(
+        ff_metric_df=ff_metric_df,
+        presto_vs_aimnet2_df=presto_vs_aimnet2_df,
+        method_order=detailed_method_order,
+        output_path=output_dir / "summary_metrics_vs_qm_with_presto_vs_aimnet2.tex",
+    )
+
+    _save_outlier_tables_and_grid(
+        ff_metric_df=ff_metric_df,
+        output_dir=plot_dir,
+        top_n=20,
+    )
+
+    ref_window_df = _reference_windows(included_results_df, reference_method)
+    for right_method, out_name in [
+        ("openff23", "paired_rmse_vs_reference_energy_window_presto_vs_openff23.png"),
+        ("espaloma", "paired_rmse_vs_reference_energy_window_presto_vs_espaloma.png"),
+        ("aimnet2", "paired_rmse_vs_reference_energy_window_presto_vs_aimnet2.png"),
+    ]:
+        if "presto" not in detailed_method_order or right_method not in detailed_method_order:
+            continue
+        _plot_paired_rmse_vs_reference_window(
+            ff_metric_df=ff_metric_df,
+            ref_window_df=ref_window_df,
+            left_method="presto",
+            right_method=right_method,
+            output_path=plot_dir / out_name,
+        )
 
     logger.info(f"Saved results to {output_dir}")

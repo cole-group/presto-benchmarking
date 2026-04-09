@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Callable, Literal
+from typing import Literal
 
 import numpy as np
 import pandas as pd
@@ -16,6 +16,12 @@ from convenience_functions._plotting_defaults import (
     METRIC_CDF_XLIM,
     METRIC_LABELS,
     METRIC_UNITS,
+)
+from convenience_functions._stats import (
+    bootstrap_ci as _bootstrap_ci,
+    format_header_with_units as _format_header_with_units,
+    format_value_with_ci as _format_value_with_ci,
+    rms as _get_rms,
 )
 from yammbs.torsion.analysis import JSDistanceCollection, RMSECollection, RMSD, _normalize
 from yammbs.torsion import TorsionStore
@@ -104,49 +110,6 @@ def analyse_torsion_scans(
         output_table=plot_dir / "summary_metrics.tex",
         database_file=database_file,
     )
-
-
-def _get_rms(array: np.ndarray) -> float:
-    return float(np.sqrt(np.mean(array**2)))
-
-def _get_mean(array: np.ndarray) -> float:
-    return float(np.mean(array))
-
-
-def _bootstrap_ci(
-    values: np.ndarray,
-    statistic: Callable[[np.ndarray], float],
-    n_bootstrap: int = 10_000,
-    confidence_level: float = 95.0,
-    random_seed: int = 0,
-) -> tuple[float, float]:
-    """Return a percentile bootstrap confidence interval for a 1D array."""
-    values = np.asarray(values, dtype=float)
-    if values.ndim != 1:
-        raise ValueError("values must be a 1D array")
-    if values.size == 0:
-        raise ValueError("values must contain at least one element")
-
-    rng = np.random.default_rng(random_seed)
-    bootstrap_stats = np.empty(n_bootstrap, dtype=float)
-    n_values = values.size
-    for i in range(n_bootstrap):
-        sample_idx = rng.integers(0, n_values, size=n_values)
-        bootstrap_stats[i] = statistic(values[sample_idx])
-
-    alpha = (100.0 - confidence_level) / 2.0
-    lower, upper = np.percentile(bootstrap_stats, [alpha, 100.0 - alpha])
-    return float(lower), float(upper)
-
-
-def _format_value_with_ci(value: float, ci: tuple[float, float], digits: int = 2) -> str:
-    """Format estimate and CI using LaTeX super/subscript notation."""
-    return f"${value:.{digits}f}_{{{ci[0]:.{digits}f}}}^{{{ci[1]:.{digits}f}}}$"
-
-
-def _format_header_with_units(metric_name: str, units: str) -> str:
-    """Build a two-line LaTeX column header with metric and units."""
-    return rf"\shortstack{{{metric_name} \\ / {units}}}"
 
 
 def _get_force_field_display(force_field: str, ff_display_names: dict[str, str]) -> str:

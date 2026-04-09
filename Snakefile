@@ -319,6 +319,16 @@ rule analyse_folmsbee_conformers:
         mm_minimization_steps=lambda wc: config["folmsbee_analysis"][
             "mm_minimization_steps"
         ],
+        exclude_smarts_opts=lambda wc: " ".join(
+            f"--exclude-smarts '{smarts}'"
+            for smarts in config["folmsbee_analysis"].get("exclude_smarts", [])
+        ),
+        min_conformers_per_molecule=lambda wc: config["folmsbee_analysis"].get(
+            "min_conformers_per_molecule", 5
+        ),
+        min_reference_energy_window=lambda wc: config["folmsbee_analysis"].get(
+            "min_reference_energy_window", 0.0
+        ),
         n_processes_opt=lambda wc: (
             f"--n-processes {config['folmsbee_analysis']['n_processes']}"
             if config["folmsbee_analysis"].get("n_processes") is not None
@@ -330,8 +340,11 @@ rule analyse_folmsbee_conformers:
         "--reference-method '{params.reference_method}' "
         "--torsion-restraint-force-constant {params.torsion_restraint_force_constant} "
         "--mm-minimization-steps {params.mm_minimization_steps} "
+        "--min-conformers-per-molecule {params.min_conformers_per_molecule} "
+        "--min-reference-energy-window {params.min_reference_energy_window} "
         "--force-field '{input.combined_ff}' "
         "{params.extra_ff_opts} "
+        "{params.exclude_smarts_opts} "
         "{params.mlp_opts} "
         "{params.mlp_mode_opt} "
         "{params.precomputed_method_opts} "

@@ -11,11 +11,11 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 
-from convenience_functions.yammbs_torsion_analysis import (
-    _bootstrap_ci,
-    _format_header_with_units,
-    _format_value_with_ci,
-    _get_rms,
+from convenience_functions._stats import (
+    bootstrap_ci as _bootstrap_ci,
+    format_header_with_units as _format_header_with_units,
+    format_value_with_ci as _format_value_with_ci,
+    rms as _get_rms,
 )
 
 plt.style.use("ggplot")

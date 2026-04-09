@@ -161,6 +161,26 @@ def analyse_folmsbee_cli(
         None,
         help="Number of worker processes (reserved for future parallel execution)",
     ),
+    exclude_smarts: list[str] = typer.Option(
+        [],
+        "--exclude-smarts",
+        help="SMARTS pattern to exclude molecules before analysis (repeatable)",
+    ),
+    min_conformers_per_molecule: int = typer.Option(
+        5,
+        "--min-conformers-per-molecule",
+        min=1,
+        help="Exclude molecules with fewer than this many conformers",
+    ),
+    min_reference_energy_window: float = typer.Option(
+        0.0,
+        "--min-reference-energy-window",
+        min=0.0,
+        help=(
+            "Exclude molecules whose reference-energy window (max-min in kcal/mol) "
+            "is below this threshold"
+        ),
+    ),
 ) -> None:
     """Analyse Folmsbee conformer energies with restrained minimization."""
     from convenience_functions.analyse_folmsbee import analyse_folmsbee
@@ -179,6 +199,9 @@ def analyse_folmsbee_cli(
         torsion_restraint_force_constant=torsion_restraint_force_constant,
         mm_minimization_steps=mm_minimization_steps,
         n_processes=n_processes,
+        exclude_smarts=exclude_smarts,
+        min_conformers_per_molecule=min_conformers_per_molecule,
+        min_reference_energy_window=min_reference_energy_window,
     )
 
 

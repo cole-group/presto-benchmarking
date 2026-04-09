@@ -68,6 +68,12 @@ yammbs_analysis:
 # Folmsbee conformer benchmark analysis configuration
 folmsbee_analysis:
   reference_method: "dlpno"
+  exclude_smarts:
+    - "[#15]"
+    - "[SX4](=[OX1])(=[OX1])[NX3]"
+    - "[SX4](=[OX1])(=[OX1])[NX2]"
+  min_conformers_per_molecule: 5
+  min_reference_energy_window: 0.0
   precomputed_methods:
     - "mp2"
     - "wb97"
