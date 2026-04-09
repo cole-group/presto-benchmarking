@@ -206,6 +206,24 @@ def split_qca_input_cli(
     )
 
 
+@app.command("subset-qca-input-by-smiles")
+def subset_qca_input_by_smiles_cli(
+    input_json_path: Path = typer.Argument(..., help="Path to input QCA JSON"),
+    selected_smiles_csv_path: Path = typer.Argument(
+        ..., help="Path to existing split smiles.csv"
+    ),
+    output_json_path: Path = typer.Argument(..., help="Path for output subset JSON"),
+) -> None:
+    """Subset a QCA JSON dataset by molecule membership in an existing split CSV."""
+    from convenience_functions.split_qca_input import save_sub_dataset_by_smiles
+
+    save_sub_dataset_by_smiles(
+        input_json_path=input_json_path,
+        selected_smiles_csv_path=selected_smiles_csv_path,
+        output_json_path=output_json_path,
+    )
+
+
 @app.command("analyse-smiles-descriptors")
 def analyse_smiles_descriptors_cli(
     smiles_csv_path: Path = typer.Argument(..., help="Path to smiles.csv file"),
@@ -376,6 +394,11 @@ def analyse_torsion_scans_cli(
         None,
         help="Number of parallel processes",
     ),
+    plot_torsion_ids: list[int] = typer.Option(
+        [],
+        "--plot-torsion-id",
+        help="Torsion IDs to generate detailed scan plots for",
+    ),
 ) -> None:
     """Run yammbs torsion scan analysis and generate metrics/plots."""
     from convenience_functions.yammbs_torsion_analysis import analyse_torsion_scans
@@ -392,6 +415,7 @@ def analyse_torsion_scans_cli(
         extra_force_fields=[*extra_force_fields, str(combined_force_field)],
         method=method,
         n_processes=n_processes,
+        torsion_plot_ids=plot_torsion_ids,
     )
 
 

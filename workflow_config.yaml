@@ -51,14 +51,19 @@ yammbs_analysis:
       validation:
         # For validation, all ablation variants are included in analyse_tnet500_validation_ablations rule
         extra_force_fields: []
+        torsion_plot_ids:
+          - 412
+          - 140
+          - 477
+          - 493
     jacs_fragments:
       test:
         extra_force_fields:
           - "input_ff/bespokefit1_sage_jacs_frags.offxml"
           - "input_ff/esp04.offxml"
-          - "input_ff/de-force_unconstrained-1.0.3.offxml"
+            #- "input_ff/de-force_unconstrained-1.0.3.offxml"
           # - "garnet"
-            #- "input_ff/aceff20.offxml"
+          - "input_ff/aceff20.offxml"
 
 # Folmsbee conformer benchmark analysis configuration
 folmsbee_analysis:
@@ -70,7 +75,7 @@ folmsbee_analysis:
   mlp_names: ["aimnet2", "aceff-2.0"]
   single_point_mlp: true
   torsion_restraint_force_constant: 100000
-  mm_minimization_steps: 0
+  mm_minimization_steps: -1
   n_processes: null
   targets:
     test:

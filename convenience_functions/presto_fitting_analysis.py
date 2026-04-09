@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import warnings
 
 import h5py
 import numpy as np
@@ -33,12 +34,17 @@ ITERATION_SPECS: tuple[IterationSpec, ...] = (
     IterationSpec(label="Iteration 2", stage_dir="training_iteration_2", stage_index=2),
 )
 
+ITERATION_2_INDEX = 2
+ITERATION_2_RMSE_FLAG_THRESHOLD = 1.0 # kcal mol^-1 atom^-1, large RMSE threshold for flagging fits for further investigation.
+
 
 def _get_fit_dirs(presto_output_dir: Path) -> list[Path]:
+    """Return a list of fit directories under the presto output directory. This
+    is a bit sloppy"""
     if not presto_output_dir.exists():
         raise FileNotFoundError(f"presto output directory not found: {presto_output_dir}")
 
-    fit_dirs = sorted(path for path in presto_output_dir.iterdir() if path.is_dir() and path.name.isdigit())
+    fit_dirs = sorted(path for path in presto_output_dir.iterdir() if path.is_dir() and "fail" not in path.name.lower())
     if not fit_dirs:
         raise FileNotFoundError(
             "No fit directories found under output directory. Expected numeric directories such as 0, 1, 2. "
@@ -168,6 +174,63 @@ def create_bootstrapped_summary_table(
     return summary_df.drop(columns=["_iteration_index"]).reset_index(drop=True)
 
 
+def create_iteration_2_flagged_fits_dataframe(
+    rmse_df: pd.DataFrame,
+    rmse_threshold: float = ITERATION_2_RMSE_FLAG_THRESHOLD,
+) -> pd.DataFrame:
+    """Return fits where iteration 2 per-atom energy RMSE exceeds the threshold."""
+    required_columns = {
+        "fit_id",
+        "iteration_index",
+        "per_atom_energy_rmse",
+    }
+    missing_cols = required_columns.difference(rmse_df.columns)
+    if missing_cols:
+        raise ValueError(f"Input dataframe missing required columns: {sorted(missing_cols)}")
+
+    flagged_df = (
+        rmse_df.loc[
+            (rmse_df["iteration_index"] == ITERATION_2_INDEX)
+            & (rmse_df["per_atom_energy_rmse"] > rmse_threshold),
+            ["fit_id", "per_atom_energy_rmse"],
+        ]
+        .sort_values("per_atom_energy_rmse", ascending=False)
+        .reset_index(drop=True)
+    )
+    return flagged_df
+
+
+def _filter_flagged_fits_with_warning(
+    rmse_df: pd.DataFrame,
+    rmse_threshold: float = ITERATION_2_RMSE_FLAG_THRESHOLD,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Exclude fits above threshold and emit a warning describing what was removed."""
+    flagged_df = create_iteration_2_flagged_fits_dataframe(
+        rmse_df=rmse_df,
+        rmse_threshold=rmse_threshold,
+    )
+    if flagged_df.empty:
+        return rmse_df, flagged_df
+
+    excluded_fit_ids = flagged_df["fit_id"].astype(str).tolist()
+    warnings.warn(
+        "Excluding "
+        f"{len(excluded_fit_ids)} fit(s) with iteration 2 per-atom energy RMSE > {rmse_threshold:.3f}: "
+        f"{', '.join(excluded_fit_ids)}",
+        UserWarning,
+        stacklevel=2,
+    )
+
+    filtered_rmse_df = rmse_df.loc[~rmse_df["fit_id"].isin(excluded_fit_ids)].reset_index(drop=True)
+    if filtered_rmse_df.empty:
+        raise ValueError(
+            "All fits were excluded by the iteration 2 RMSE threshold; no data remains for analysis. "
+            f"Threshold: {rmse_threshold:.3f}"
+        )
+
+    return filtered_rmse_df, flagged_df
+
+
 def plot_fit_rmse_paired(
     rmse_df: pd.DataFrame,
     output_path: Path,
@@ -224,22 +287,31 @@ def analyse_presto_fits(
     n_bootstrap: int = 10_000,
     confidence_level: float = 95.0,
     random_seed: int = 0,
+    iteration_2_rmse_threshold: float = ITERATION_2_RMSE_FLAG_THRESHOLD,
 ) -> None:
     """Run bulk presto fit RMSE analysis and write plot + tables."""
     output_dir.mkdir(parents=True, exist_ok=True)
 
     rmse_df = compute_per_fit_rmse_dataframe(presto_output_dir=presto_output_dir)
-    summary_df = create_bootstrapped_summary_table(
+    filtered_rmse_df, flagged_iteration_2_fits_df = _filter_flagged_fits_with_warning(
         rmse_df=rmse_df,
+        rmse_threshold=iteration_2_rmse_threshold,
+    )
+    summary_df = create_bootstrapped_summary_table(
+        rmse_df=filtered_rmse_df,
         n_bootstrap=n_bootstrap,
         confidence_level=confidence_level,
         random_seed=random_seed,
     )
 
-    rmse_df.to_csv(output_dir / "presto_fit_validation_energy_rmse_per_fit.csv", index=False)
+    filtered_rmse_df.to_csv(output_dir / "presto_fit_validation_energy_rmse_per_fit.csv", index=False)
     summary_df.to_csv(output_dir / "presto_fit_validation_energy_rmse_summary.csv", index=False)
+    flagged_iteration_2_fits_df.to_csv(
+        output_dir / "presto_fit_validation_energy_rmse_iteration_2_gt_threshold.csv",
+        index=False,
+    )
     save_summary_table_latex(summary_df, output_dir / "presto_fit_validation_energy_rmse_summary.tex")
     plot_fit_rmse_paired(
-        rmse_df=rmse_df,
+        rmse_df=filtered_rmse_df,
         output_path=output_dir / "presto_fit_validation_energy_rmse.png",
     )

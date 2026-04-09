@@ -23,12 +23,12 @@ from convenience_functions._stats import (
 
 matplotlib.use("Agg")
 
-HEATMAP_METRICS = ["RMSD", "RMSE", "Mean JSD (500 K)"]
+HEATMAP_METRICS = ["RMSD", "RMSE", "RMS $\sqrt{JSD}$ (500 K)"]
 
 # Keys excluded from colorbar scaling (still displayed; large values saturate the scale)
 COLORBAR_EXCL = {"openff-2.3.0"}
 
-_METRIC_COLUMN = {"RMSD": "rmsd", "RMSE": "rmse", "Mean JSD (500 K)": "js_distance"}
+_METRIC_COLUMN = {"RMSD": "rmsd", "RMSE": "rmse", "RMS $\sqrt{JSD}$ (500 K)": "js_distance"}
 _REFERENCE_LABEL = "default"
 
 
@@ -47,9 +47,7 @@ def _extract_metric(record: dict, metric_name: str) -> float:
 
 
 def _aggregate(values: np.ndarray, metric_label: str) -> float:
-    if metric_label in {"RMSD", "RMSE"}:
-        return float(np.sqrt(np.mean(values**2)))
-    return float(np.mean(values))  # Mean JSD (500 K)
+    return float(np.sqrt(np.mean(values**2)))  # RMS JSD (500 K)
 
 
 def _sign_test_pvalue(ref_vals: np.ndarray, ff_vals: np.ndarray) -> float:

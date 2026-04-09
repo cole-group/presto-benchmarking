@@ -47,6 +47,7 @@ def analyse_torsion_scans(
         "openmm_torsion_atoms_frozen", "openmm_torsion_restrained"
     ] = "openmm_torsion_restrained",
     n_processes: int | None = None,
+    torsion_plot_ids: list[int] | None = None,
 ) -> None:
     """Run yammbs torsion analysis across selected force fields."""
     force_fields = base_force_fields + extra_force_fields
@@ -92,6 +93,12 @@ def analyse_torsion_scans(
     plot_paired_stats(
         output_metrics=output_metrics, plot_dir=plot_dir, show_significance=False
     )
+    plot_requested_torsion_scans(
+        store=store,
+        force_fields=force_fields,
+        torsion_plot_ids=torsion_plot_ids or [],
+        output_dir=plot_dir / "torsion_id_scans",
+    )
     save_summary_table_latex(
         output_metrics=output_metrics,
         output_table=plot_dir / "summary_metrics.tex",
@@ -132,7 +139,7 @@ def _bootstrap_ci(
     return float(lower), float(upper)
 
 
-def _format_value_with_ci(value: float, ci: tuple[float, float], digits: int = 3) -> str:
+def _format_value_with_ci(value: float, ci: tuple[float, float], digits: int = 2) -> str:
     """Format estimate and CI using LaTeX super/subscript notation."""
     return f"${value:.{digits}f}_{{{ci[0]:.{digits}f}}}^{{{ci[1]:.{digits}f}}}$"
 
@@ -316,7 +323,7 @@ def create_summary_table(
         rows.append(
             {
                 force_field_column: (
-                    f"{_get_force_field_display(force_field, ff_display)} / DFT"
+                    f"{_get_force_field_display(force_field, ff_display)} / QM"
                 ),
                 rms_rmsd_column: _format_value_with_ci(rms_rmsd, rms_rmsd_ci),
                 rms_rmse_column: _format_value_with_ci(rms_rmse, rms_rmse_ci),
@@ -422,6 +429,180 @@ def save_summary_table_latex(
     latex_table = summary_df.to_latex(index=False, escape=False)
     with open(output_table, "w") as file_handle:
         file_handle.write(latex_table)
+
+
+def _get_torsion_highlight_image(store: TorsionStore, torsion_id: int) -> np.ndarray:
+    """Render an image of the molecule with the scanned torsion highlighted."""
+    from openff.toolkit import Molecule
+    from rdkit.Chem import AllChem
+    from rdkit.Chem import Draw
+
+    smiles = store.get_smiles_by_torsion_id(torsion_id)
+    dihedral_indices = store.get_dihedral_indices_by_torsion_id(torsion_id)
+
+    molecule = Molecule.from_mapped_smiles(
+        smiles,
+        allow_undefined_stereo=True,
+    )
+    rdkit_molecule = molecule.to_rdkit()
+    AllChem.Compute2DCoords(rdkit_molecule)
+
+    highlight_atoms = list(dihedral_indices)
+    highlight_bonds = []
+    for atom_a, atom_b in zip(highlight_atoms, highlight_atoms[1:]):
+        bond = rdkit_molecule.GetBondBetweenAtoms(atom_a, atom_b)
+        if bond is None:
+            raise ValueError(
+                f"Could not find bond between atoms {atom_a} and {atom_b} for torsion ID {torsion_id}."
+            )
+        highlight_bonds.append(bond.GetIdx())
+
+    image = Draw.MolToImage(
+        rdkit_molecule,
+        size=(500, 350),
+        highlightAtoms=highlight_atoms,
+        highlightBonds=highlight_bonds,
+    )
+    return np.asarray(image)
+
+
+def plot_requested_torsion_scans(
+    store: TorsionStore,
+    force_fields: list[str],
+    torsion_plot_ids: list[int],
+    output_dir: Path,
+) -> None:
+    """Plot scan profiles for requested torsion IDs with molecule highlights and RMSEs."""
+    if len(torsion_plot_ids) == 0:
+        return
+
+    from cmcrameri import cm
+    from matplotlib.colors import to_hex
+    from openff.toolkit import Molecule
+
+    requested_ids = list(dict.fromkeys(torsion_plot_ids))
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Use six evenly spaced colors from a color-blind-friendly cmcrameri map.
+    palette = [to_hex(cm.batlow(value)) for value in np.linspace(0.1, 0.9, 6)]
+    markers = ["o", "^", "s", "D", "v", "P", "X", "<", ">", "*"]
+    line_styles = ["-", "--", "-.", ":"]
+
+    def _ff_key_from_raw_name(raw_name: str) -> str:
+        if raw_name.endswith("/combined_force_field.offxml"):
+            return Path(raw_name).parent.name
+        return raw_name
+
+    for torsion_id in requested_ids:
+        qm_energies = dict(sorted(store.get_qm_energies_by_torsion_id(torsion_id).items()))
+        qm_points = store.get_qm_points_by_torsion_id(torsion_id)
+
+        qm_minimum_angle = min(qm_energies.items(), key=lambda item: item[1])[0]
+        torsion_angles = list(qm_energies.keys())
+        qm_relative_energies = [
+            qm_energies[angle] - qm_energies[qm_minimum_angle]
+            for angle in torsion_angles
+        ]
+
+        molecule = Molecule.from_mapped_smiles(
+            store.get_smiles_by_torsion_id(torsion_id),
+            allow_undefined_stereo=True,
+        )
+
+        figure = pyplot.figure(figsize=(4.56, 6.0))
+        grid = figure.add_gridspec(
+            3,
+            1,
+            height_ratios=[1.32, 1.0, 1.0],
+            hspace=0.08,
+        )
+
+        molecule_axis = figure.add_subplot(grid[0, 0])
+        energy_axis = figure.add_subplot(grid[1, 0])
+        geometry_axis = figure.add_subplot(grid[2, 0], sharex=energy_axis)
+
+        molecule_axis.imshow(_get_torsion_highlight_image(store=store, torsion_id=torsion_id))
+        molecule_axis.axis("off")
+
+        for index, force_field in enumerate(force_fields):
+            mm_energies = dict(
+                sorted(
+                    store.get_mm_energies_by_torsion_id(
+                        torsion_id=torsion_id,
+                        force_field=force_field,
+                    ).items()
+                )
+            )
+            mm_points = store.get_mm_points_by_torsion_id(
+                torsion_id=torsion_id,
+                force_field=force_field,
+            )
+
+            color = palette[index % len(palette)]
+            marker = markers[(index // 10) % len(markers)]
+            line_style = line_styles[(index // len(palette)) % len(line_styles)]
+
+            mm_relative_energies = [
+                mm_energies[angle] - mm_energies[qm_minimum_angle]
+                for angle in torsion_angles
+            ]
+            ff_name = _get_force_field_display(
+                _ff_key_from_raw_name(force_field),
+                FORCE_FIELD_DISPLAY_MAP,
+            )
+            ff_label = ff_name
+
+            energy_axis.plot(
+                torsion_angles,
+                mm_relative_energies,
+                color=color,
+                marker=marker,
+                linestyle=line_style,
+                label=ff_label,
+            )
+
+            rmsd_values = []
+            for angle in torsion_angles:
+                rmsd = RMSD.from_data(
+                    torsion_id=torsion_id,
+                    molecule=molecule,
+                    qm_points={angle: qm_points[angle]},
+                    mm_points={angle: mm_points[angle]},
+                )
+                rmsd_values.append(float(rmsd.rmsd))
+
+            geometry_axis.plot(
+                torsion_angles,
+                rmsd_values,
+                color=color,
+                marker=marker,
+                linestyle=line_style,
+                label=ff_label,
+            )
+
+        energy_axis.plot(
+            torsion_angles,
+            qm_relative_energies,
+            color="black",
+            linestyle="-",
+            marker="o",
+            markersize=2.5,
+            markeredgewidth=0.6,
+            label="QM",
+            alpha=1.0,
+            linewidth=1.6,
+            zorder=10,
+        )
+
+        energy_axis.set_ylabel("Energy /\nkcal mol$^{-1}$")
+        geometry_axis.set_ylabel("RMSD /\n$\mathrm{\AA}$")
+        geometry_axis.set_xlabel("Torsion angle / degrees")
+        energy_axis.tick_params(axis="x", which="both", labelbottom=False)
+        energy_axis.legend(loc="upper left", bbox_to_anchor=(1.02, 1.0), fontsize=9)
+
+        figure.savefig(output_dir / f"{torsion_id}.png", dpi=300, bbox_inches="tight")
+        pyplot.close(figure)
 
 
 def plot_cdfs(output_metrics: Path, plot_dir: Path) -> None:

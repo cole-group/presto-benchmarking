@@ -359,6 +359,56 @@ def save_sub_dataset(ids: list[int], json_file: Path, output_file: Path) -> None
     )
 
 
+def save_sub_dataset_by_smiles(
+    input_json_path: Path,
+    selected_smiles_csv_path: Path,
+    output_json_path: Path,
+) -> None:
+    """Save a JSON sub-dataset by matching canonical SMILES from a split CSV.
+
+    This is used to transfer an existing train/validation split onto a new dataset
+    version by preserving molecule membership defined by ``smiles.csv``.
+    """
+    selected_df = pd.read_csv(selected_smiles_csv_path)
+    if "smiles" not in selected_df.columns:
+        raise ValueError(
+            f"Expected a 'smiles' column in {selected_smiles_csv_path}, "
+            f"found columns: {list(selected_df.columns)}"
+        )
+
+    selected_canonical_smiles = {
+        canonical_smiles_from_mapped(smiles) for smiles in selected_df["smiles"]
+    }
+
+    with open(input_json_path, "r") as f:
+        data = json.load(f)
+
+    subset_entries = []
+    found_canonical_smiles: set[str] = set()
+    for entry in data["qm_torsions"]:
+        canonical_smiles = canonical_smiles_from_mapped(entry["mapped_smiles"])
+        if canonical_smiles in selected_canonical_smiles:
+            subset_entries.append(entry)
+            found_canonical_smiles.add(canonical_smiles)
+
+    output_json_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_json_path, "w") as f:
+        json.dump({"qm_torsions": subset_entries}, f, indent=2)
+
+    missing_smiles = selected_canonical_smiles - found_canonical_smiles
+    if missing_smiles:
+        logger.warning(
+            f"Found {len(found_canonical_smiles)} / {len(selected_canonical_smiles)} canonical "
+            f"SMILES from split file in {input_json_path}. "
+            f"Missing {len(missing_smiles)} molecule(s) in the source dataset."
+        )
+
+    logger.info(
+        f"Saved split-by-smiles sub-dataset JSON ({len(subset_entries)} entries) "
+        f"to '{output_json_path}'."
+    )
+
+
 # ---------------------------------------------------------------------------
 # Splitting
 # ---------------------------------------------------------------------------
