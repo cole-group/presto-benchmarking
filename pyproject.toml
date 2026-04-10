@@ -69,7 +69,6 @@ cuda-cudart-dev = ">=12,<13"
 mace-torch = "==0.3.15"
 smee = { git = "https://github.com/openforcefield/smee.git", rev = "36bc8286b16ae815f13cfb10d8096ff1b9aeca0e" }
 descent = { git = "https://github.com/openforcefield/descent", rev = "15101d021d2a387809f0d877c61d4baabecdc78e" }
-presto = { git = "https://github.com/cole-group/presto.git", rev = "1aa5eb6c743fd6150dc127f943dce54471ead6ba"}
 # Use local presto install for development
 # presto = { path = "/home/campus.ncl.ac.uk/nfc78/software/devel/presto-clean/", editable = true }
 yammbs = { git = "https://github.com/fjclark/yammbs", rev = "ebe7e5eb61d9ea73e0f972fea4c3ff748b2515b3" }
@@ -79,6 +78,12 @@ deepchem = { version = ">=2.7.0", extras = ["jax"] } # Interferes with pytorch i
 aimnet = ">=0.1.0"
 # aimnet doesn't like more recent versions
 nvalchemi-toolkit-ops = "==0.2.0"
+
+[tool.pixi.feature.presto-default.pypi-dependencies]
+presto = { git = "https://github.com/cole-group/presto.git", rev = "1aa5eb6c743fd6150dc127f943dce54471ead6ba" }
+
+[tool.pixi.feature.presto-save-ff-trajectory.pypi-dependencies]
+presto = { git = "https://github.com/cole-group/presto.git", rev = "15d11cf9649df5a1497973cd413d2f354ba7e76c" }
 
 [tool.pixi.feature.espaloma.dependencies]
 espaloma = ">=0.3.1"
@@ -94,8 +99,9 @@ igraph = "*"
 
 
 [tool.pixi.environments]
-default = {features = ["common", "standard", "garnet"]}
-espaloma = {features = ["common", "espaloma"]}
+default = {features = ["common", "standard", "garnet", "presto-default"]}
+default-save-ff-trajectory = {features = ["common", "standard", "garnet", "presto-save-ff-trajectory"]}
+espaloma = {features = ["common", "espaloma", "presto-default"]}
 
 [tool.setuptools.package-dir]
 "presto_benchmark" = "convenience_functions"

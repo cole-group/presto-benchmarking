@@ -73,7 +73,7 @@ folmsbee_analysis:
     - "[SX4](=[OX1])(=[OX1])[NX3]"
     - "[SX4](=[OX1])(=[OX1])[NX2]"
   min_conformers_per_molecule: 5
-  min_reference_energy_window: 0.0
+  min_reference_energy_window: 1.0
   precomputed_methods:
     - "mp2"
     - "wb97"
@@ -88,4 +88,33 @@ folmsbee_analysis:
       extra_force_fields:
         - "input_ff/openff_unconstrained-2.3.0.offxml"
         - "input_ff/esp04.offxml"
+
+# TYK2 reproducibility benchmark configuration
+tyk2_reproducibility:
+  smiles: "CCC(CC)C(=O)Nc2cc(NC(=O)c1c(Cl)cccc1Cl)ccn2"
+  repeats: 10
+  config_name: "aimnet2"
+  pixi_environment: "default-save-ff-trajectory"
+
+# TYK2 congeneric series benchmark configuration
+tyk2_congeneric_series:
+  smiles:
+    - "c1(c(c(c(c(c1[H])Cl)C(=O)N(c1c(c(nc(c1[H])N(C(=O)C([H])([H])[H])[H])[H])[H])[H])Cl)[H])[H]"
+    - "c1(c(c(c(c(c1[H])Cl)C(=O)N(c1c(c(nc(c1[H])N(C(=O)C(C([H])([H])[H])(C([H])([H])[H])C([H])([H])[H])[H])[H])[H])[H])Cl)[H])[H]"
+    - "c1(c(c(c(c(c1[H])Cl)C(=O)N(c1c(c(nc(c1[H])N(C(=O)[C@]1(C([C@]1(Cl)[H])([H])[H])[H])[H])[H])[H])[H])Cl)[H])[H]"
+    - "c1(c(c(c(c(c1[H])Cl)C(=O)N(c1c(c(nc(c1[H])N(C(=O)C1([H])C(C(C(C1([H])[H])([H])[H])([H])[H])([H])[H])[H])[H])[H])[H])Cl)[H])[H]"
+    - "c1(c(c(c(c(c1[H])Cl)C(=O)N(c1c(c(nc(c1[H])N(C(=O)C1(C(C(C1([H])[H])([H])[H])([H])[H])[H])[H])[H])[H])[H])Cl)[H])[H]"
+    - "c1(c(c(c(c(c1[H])Cl)C(=O)N(c1c(c(nc(c1[H])N(C(=O)[C@]1(C([C@]1(F)[H])([H])[H])[H])[H])[H])[H])[H])Cl)[H])[H]"
+    - "c1(c(c(c(c(c1[H])Cl)C(=O)N(c1c(c(nc(c1[H])N(C(=O)C([H])(C([H])([H])[H])[H])[H])[H])[H])[H])Cl)[H])[H]"
+    - "c1(c(c(c(c(c1[H])Cl)C(=O)N(c1c(c(nc(c1[H])N(C(=O)N(C([H])([H])C([H])([H])[H])[H])[H])[H])[H])[H])Cl)[H])[H]"
+    - "c1(c(c(c(c(c1[H])Cl)C(=O)N(c1c(c(nc(c1[H])N(C(=O)[C@]1(C([C@]1(C#N)[H])([H])[H])[H])[H])[H])[H])[H])Cl)[H])[H]"
+    - "c1(c(c(c(c(c1[H])Cl)C(=O)N(c1c(c(nc(c1[H])N(C(=O)C([H])([H])O[H])[H])[H])[H])[H])Cl)[H])[H]"
+    - "c1(c(c(c(c(c1[H])Cl)C(=O)N(c1c(c(nc(c1[H])N(C(=O)C1(C(C1([H])[H])([H])[H])[H])[H])[H])[H])[H])Cl)[H])[H]"
+    - "c1(c(c(c(c(c1[H])Cl)C(=O)N(c1c(c(nc(c1[H])N(C(=O)OC([H])([H])[H])[H])[H])[H])[H])Cl)[H])[H]"
+    - "c1(c(c(c(c(c1[H])Cl)C(=O)N(c1c(c(nc(c1[H])N(C(=O)C(C([H])([H])[H])(C([H])([H])[H])[H])[H])[H])[H])[H])Cl)[H])[H]"
+    - "c1(c(c(c(c(c1[H])Cl)C(=O)N(c1c(c(nc(c1[H])N(C(=O)[C@]1(C([C@]1(C([H])([H])[H])[H])([H])[H])[H])[H])[H])[H])[H])Cl)[H])[H]"
+    - "c1(c(c(c(c(c1[H])Cl)C(=O)N(c1c(c(nc(c1[H])N(C(=O)c1c(c(c(c(c1[H])[H])[H])[H])[H])[H])[H])[H])[H])Cl)[H])[H]"
+    - "c1(c(c(c(c(c1[H])Cl)C(=O)N(c1c(c(nc(c1[H])N(C(=O)C([H])([H])C1([H])C(C1([H])[H])([H])[H])[H])[H])[H])[H])Cl)[H])[H]"
+  config_name: "one_it_aimnet2"
+  pixi_environment: "default"
 

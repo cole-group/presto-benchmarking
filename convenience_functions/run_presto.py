@@ -20,10 +20,15 @@ def run_presto(
     suppress_unwanted_output()
 
     with open(smiles_path, "r") as f:
-        smiles = f.read().strip()
+        smiles_entries = [line.strip() for line in f.readlines() if line.strip()]
+
+    if not smiles_entries:
+        raise ValueError(f"No SMILES found in input file: {smiles_path}")
 
     config = WorkflowSettings.from_yaml(config_path)
-    config.parameterisation_settings.smiles = smiles
+    config.parameterisation_settings.smiles = (
+        smiles_entries[0] if len(smiles_entries) == 1 else smiles_entries
+    )
     config.output_dir = output_dir
 
     bespoke_ff = get_bespoke_force_field(config)

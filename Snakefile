@@ -188,6 +188,82 @@ rule create_combined_force_field:
         "pixi run -e default presto-benchmark combine-force-fields {output[0]} '{input.force_fields}'"
 
 
+rule create_tyk2_reproducibility_smiles:
+    output:
+        "benchmarking/tyk2_reproducibility/input/tyk2.smi",
+    run:
+        tyk2_config = config["tyk2_reproducibility"]
+        output_path = Path(output[0])
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(f"{tyk2_config['smiles']}\n")
+
+
+rule run_tyk2_reproducibility:
+    input:
+        smiles_file=rules.create_tyk2_reproducibility_smiles.output[0],
+        config_file=lambda wc: (
+            f"configs/{config['tyk2_reproducibility'].get('config_name', 'default')}.yaml"
+        ),
+    output:
+        expand(
+            "benchmarking/tyk2_reproducibility/output/run_{repeat:02d}/bespoke_force_field.offxml",
+            repeat=range(
+                1, config["tyk2_reproducibility"].get("repeats", 10) + 1
+            ),
+        ),
+    params:
+        repeats=lambda wc: config["tyk2_reproducibility"].get("repeats", 10),
+        pixi_environment=lambda wc: config["tyk2_reproducibility"].get(
+            "pixi_environment", "default-save-ff-trajectory"
+        ),
+    resources:
+        mem_mb=8000,
+        runtime=240,  # minutes
+        slurm_partition="gpu-s_free",
+        slurm_extra="--gpus-per-task=1",
+    shell:
+        "for i in $(seq -w 1 {params.repeats}); do "
+        "pixi run -e {params.pixi_environment} presto-benchmark run-presto "
+        "{input.config_file} {input.smiles_file} benchmarking/tyk2_reproducibility/output/run_$i; "
+        "done"
+
+
+rule create_tyk2_congeneric_series_smiles:
+    output:
+        "benchmarking/tyk2_congeneric_series/input/tyk2_congeneric_series.smi",
+    run:
+        congeneric_config = config["tyk2_congeneric_series"]
+        smiles = congeneric_config["smiles"]
+        if not isinstance(smiles, list) or not smiles:
+            raise ValueError("workflow_config.yaml: tyk2_congeneric_series.smiles must be a non-empty list")
+
+        output_path = Path(output[0])
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text("\n".join(smiles) + "\n")
+
+
+rule run_tyk2_congeneric_series:
+    input:
+        smiles_file=rules.create_tyk2_congeneric_series_smiles.output[0],
+        config_file=lambda wc: (
+            f"configs/{config['tyk2_congeneric_series'].get('config_name', 'one_it')}.yaml"
+        ),
+    output:
+        "benchmarking/tyk2_congeneric_series/output/bespoke_force_field.offxml",
+    params:
+        pixi_environment=lambda wc: config["tyk2_congeneric_series"].get(
+            "pixi_environment", "default"
+        ),
+    resources:
+        mem_mb=8000,
+        runtime=240,  # minutes
+        slurm_partition="gpu-s_free",
+        slurm_extra="--gpus-per-task=1",
+    shell:
+        "pixi run -e {params.pixi_environment} presto-benchmark run-presto "
+        "{input.config_file} {input.smiles_file} benchmarking/tyk2_congeneric_series/output"
+
+
 rule analyse_smiles_descriptors:
     input:
         smiles_csv=smiles_csv_input,
