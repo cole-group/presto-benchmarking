@@ -243,8 +243,7 @@ def prepare_tyk2_congeneric_retrain_configs(
         settings = WorkflowSettings.from_yaml(base_config_path)
         settings.n_iterations = 1
         settings.parameterisation_settings.initial_force_field = str(initial_force_field.resolve())
-        settings.parameterisation_settings.msm_settings = None
-        # Explicitly disable generated types to keep Sage input types only.
+        # Note we keep MSM here as we can't read MSM values from any precomputed FF.
         settings.parameterisation_settings.type_generation_settings = {}
         settings.training_sampling_settings = PreComputedDatasetSettings(dataset_paths=training_dataset_paths)
         settings.testing_sampling_settings = PreComputedDatasetSettings(dataset_paths=testing_dataset_paths)
