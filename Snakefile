@@ -11,6 +11,7 @@ TNET500_REOPT_V4_QCA_DATASET = "TorsionNet500 Re-optimization TorsionDrives v4.0
 
 QCA_DATASET_NAMES = {
     "jacs_fragments": "OpenFF-benchmark-ligand-fragments-v2.0",
+    "jacs_fragments_full_mol_fits": "OpenFF-benchmark-ligand-fragments-v2.0",
     "1mer_backbone": "OpenFF Protein Dipeptide 2-D TorsionDrive v2.0",
     "3mer_backbone": "OpenFF Protein Capped 3-mer Backbones v1.0",
     "1mer_side_chain": "OpenFF Protein Capped 1-mer Sidechains v1.3",
@@ -95,6 +96,33 @@ def qca_exclude_smiles_opts(dataset_name: str) -> str:
     return " ".join(f"--exclude-smiles '{s}'" for s in smiles)
 
 
+def full_molecule_fit_force_field_map(wildcards: Any | None = None) -> dict[str, str]:
+    """Return {label: offxml_path} for supplied full-molecule bespoke fits."""
+    paths = sorted(Path("input_ff/from_sandbox/ff_files").glob("*/*.offxml"))
+    if not paths:
+        raise ValueError(
+            "No full-molecule fit OFFXML files found under "
+            "input_ff/from_sandbox/ff_files/*/*.offxml"
+        )
+    return {path.parent.name: str(path) for path in paths}
+
+
+def full_molecule_fit_force_field_labels(wildcards: Any | None = None) -> list[str]:
+    """Return sorted labels for supplied full-molecule bespoke fits."""
+    return sorted(full_molecule_fit_force_field_map().keys())
+
+
+def full_molecule_fit_force_field_path(wildcards: Any) -> str:
+    """Resolve a full-molecule bespoke fit OFFXML by wildcard label."""
+    ff_map = full_molecule_fit_force_field_map()
+    if wildcards.ff_label not in ff_map:
+        raise ValueError(
+            f"Unknown ff_label '{wildcards.ff_label}'. "
+            f"Expected one of {sorted(ff_map.keys())}."
+        )
+    return ff_map[wildcards.ff_label]
+
+
 
 def yammbs_target_config(wildcards: Any) -> dict[str, Any]:
     """Return yammbs config for a dataset/split target."""
@@ -155,6 +183,11 @@ rule all:
         "benchmarking/tnet500_reopt_v4/analysis/test/default/metrics.json",
         "benchmarking/tnet500_reopt_v4/analysis/validation/ablations/metrics.json",
         "benchmarking/jacs_fragments/analysis/test/default/metrics.json",
+        # JACS Fragments full-molecule fits transfer benchmark (per supplied FF)
+        expand(
+            "benchmarking/jacs_fragments_full_mol_fits/analysis/test/{ff_label}/metrics.json",
+            ff_label=full_molecule_fit_force_field_labels(),
+        ),
         # smiles.csv descriptor analysis aggregate
         "benchmarking/analysis/smiles_descriptors/smiles_descriptor_aggregate_mean_std.csv",
         "benchmarking/analysis/smiles_descriptors/smiles_descriptor_aggregate_mean_std.tex",
@@ -353,7 +386,7 @@ rule analyse_tyk2_congeneric_series_retrains:
         retrain_outputs=expand(
             (
                 "benchmarking/tyk2_congeneric_series/retrains/max_extend_{max_extend}/"
-                "run_{repeat:02d}/training_iteration_1/bespoke_ff.offxml"
+                "run_{repeat}/training_iteration_1/bespoke_ff.offxml"
             ),
             max_extend=tyk2_congeneric_retrain_labels(),
             repeat=range(
@@ -393,7 +426,7 @@ rule analyse_smiles_descriptors:
         mean_std_tex="benchmarking/{dataset}/input/{dataset_type}/smiles_descriptor_mean_std.tex",
         plots_dir=directory("benchmarking/{dataset}/input/{dataset_type}/smiles_descriptor_plots"),
     wildcard_constraints:
-        dataset="tnet500|jacs_fragments|1mer_backbone|3mer_backbone|1mer_side_chain",
+        dataset="tnet500|jacs_fragments|jacs_fragments_full_mol_fits|1mer_backbone|3mer_backbone|1mer_side_chain",
         dataset_type="test|validation",
     shell:
         "pixi run -e default presto-benchmark analyse-smiles-descriptors {input.smiles_csv}"
@@ -428,6 +461,8 @@ rule analyse_torsion_scans_yammbs:
         fit_rmse_plot_png="benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/plots/presto_fit_validation_energy_rmse.png",
         fit_rmse_summary_csv="benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/plots/presto_fit_validation_energy_rmse_summary.csv",
         fit_rmse_summary_tex="benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/plots/presto_fit_validation_energy_rmse_summary.tex",
+    wildcard_constraints:
+        dataset="tnet500|tnet500_reopt_v4|jacs_fragments",
     params:
         analysis_dir=lambda wc: f"benchmarking/{wc.dataset}/analysis/{wc.dataset_type}/{wc.config_name}",
         presto_output_dir=lambda wc: f"benchmarking/{wc.dataset}/output/{wc.dataset_type}/{wc.config_name}",
@@ -732,6 +767,57 @@ rule get_qca_torsion_input_dataset:
     shell:
         "pixi run -e default presto-benchmark get-qca-torsion-input "
         "'{params.qca_dataset_name}' {output[0]} {params.exclude_opts}"
+
+
+rule filter_jacs_fragments_full_mol_fits_torsions_per_force_field:
+    input:
+        qca_data_json="benchmarking/jacs_fragments_full_mol_fits/input/test/test.json",
+        force_field=full_molecule_fit_force_field_path,
+    output:
+        filtered_qca_data_json="benchmarking/jacs_fragments_full_mol_fits/input_filtered/test/{ff_label}/test_filtered_bespoke.json",
+    wildcard_constraints:
+        ff_label="|".join(full_molecule_fit_force_field_labels()),
+    shell:
+        "pixi run -e default presto-benchmark filter-qca-torsions-by-bespoke-scans "
+        "{input.qca_data_json} {input.force_field} {output.filtered_qca_data_json}"
+
+
+rule analyse_jacs_fragments_full_mol_fits_per_force_field:
+    input:
+        qca_data_json=rules.filter_jacs_fragments_full_mol_fits_torsions_per_force_field.output.filtered_qca_data_json,
+        force_field=full_molecule_fit_force_field_path,
+    output:
+        metrics_json="benchmarking/jacs_fragments_full_mol_fits/analysis/test/{ff_label}/metrics.json",
+        minimized_json="benchmarking/jacs_fragments_full_mol_fits/analysis/test/{ff_label}/minimized.json",
+        plot_png="benchmarking/jacs_fragments_full_mol_fits/analysis/test/{ff_label}/plots/rmse.png",
+        paired_stats_png="benchmarking/jacs_fragments_full_mol_fits/analysis/test/{ff_label}/plots/paired_stats.png",
+        paired_stats_no_sig_png="benchmarking/jacs_fragments_full_mol_fits/analysis/test/{ff_label}/plots/paired_stats_no_sig.png",
+    wildcard_constraints:
+        ff_label="|".join(full_molecule_fit_force_field_labels()),
+    params:
+        analysis_dir=lambda wc: f"benchmarking/jacs_fragments_full_mol_fits/analysis/test/{wc.ff_label}",
+        base_ff_opts=lambda wc: " ".join(
+            f"--base-force-field '{ff}'"
+            for ff in config["yammbs_analysis"]["targets"]["jacs_fragments_full_mol_fits"]["test"].get(
+                "base_force_fields", config["yammbs_analysis"]["base_force_fields"]
+            )
+        ),
+        extra_ff_opts=lambda wc: " ".join(
+            f"--extra-force-field '{ff}'"
+            for ff in config["yammbs_analysis"]["targets"]["jacs_fragments_full_mol_fits"]["test"][
+                "extra_force_fields"
+            ]
+        ),
+        torsion_plot_id_opts=lambda wc: " ".join(
+            f"--plot-torsion-id {torsion_id}"
+            for torsion_id in config["yammbs_analysis"]["targets"]["jacs_fragments_full_mol_fits"][
+                "test"
+            ].get("torsion_plot_ids", [])
+        ),
+    shell:
+        "pixi run -e default presto-benchmark analyse-torsion-scans "
+        "{input.qca_data_json} {input.force_field} {params.analysis_dir} "
+        "{params.base_ff_opts} {params.extra_ff_opts} {params.torsion_plot_id_opts}"
 
 
 

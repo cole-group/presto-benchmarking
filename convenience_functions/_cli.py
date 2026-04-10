@@ -38,6 +38,10 @@ def combine_force_fields_cli(
             "(label inferred from parent directory)"
         ),
     ),
+    base_ff: str = typer.Option(
+        "openff_unconstrained-2.3.0.offxml",
+        help="Base force field XML file to combine with (default: openff_unconstrained-2.3.0.offxml)",
+    ),
 ) -> None:
     """Combine multiple force fields into a single file."""
     from convenience_functions.combine_ffs import combine_force_fields
@@ -51,6 +55,7 @@ def combine_force_fields_cli(
     combine_force_fields(
         ff_to_combine_paths=ff_to_combine_paths,
         output_file=output_file,
+        base_ff=base_ff,
     )
 
 
@@ -244,6 +249,28 @@ def subset_qca_input_by_smiles_cli(
         input_json_path=input_json_path,
         selected_smiles_csv_path=selected_smiles_csv_path,
         output_json_path=output_json_path,
+    )
+
+
+@app.command("filter-qca-torsions-by-bespoke-scans")
+def filter_qca_torsions_by_bespoke_scans_cli(
+    input_qca_json_path: Path = typer.Argument(..., help="Path to input QCA JSON"),
+    force_field_path: Path = typer.Argument(
+        ..., help="Path to force field used for torsion parameter assignment"
+    ),
+    output_qca_json_path: Path = typer.Argument(
+        ..., help="Path for output filtered QCA JSON"
+    ),
+) -> None:
+    """Keep only QCA torsions whose scanned central bond is fully bespoke-parameterized."""
+    from convenience_functions.filter_qca_torsions import (
+        filter_qca_torsions_to_bespoke_scans,
+    )
+
+    filter_qca_torsions_to_bespoke_scans(
+        input_qca_json_path=input_qca_json_path,
+        force_field_path=force_field_path,
+        output_qca_json_path=output_qca_json_path,
     )
 
 

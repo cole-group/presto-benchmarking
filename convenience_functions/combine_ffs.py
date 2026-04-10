@@ -58,19 +58,35 @@ def combine_force_fields(
 
                 # Skip parameters that are already included in the base force field
                 if parameter.smirks in original_parameter_smirks:
-                    # # Make sure the parameter is identical to the one in the base force field
-                    # original_param = original_handler[parameter.smirks]
-                    # if not all(
-                    #     parameter.to_dict()[key] == original_param.to_dict()[key]
-                    #     for key in parameter.to_dict()
-                    #     if key != "id"
-                    # ):
-                    #     logger.error(
-                    #         f"Parameter {parameter.smirks} from {ff_name} is not identical to the parameter in the base force field."
-                    #     )
-                    #     raise ValueError(
-                    #         f"Parameter {parameter.smirks} from {ff_name} is not identical to the parameter in the base force field."
-                    #     )
+                    # Make sure the parameter is identical to the one in the base force field
+                    original_param = original_handler[parameter.smirks]
+
+                    original_keys = set(original_param.to_dict().keys()) - {"id"}
+                    new_keys = set(parameter.to_dict().keys()) - {"id"}
+
+                    if new_keys != original_keys:
+                        # Continue if it's a non-bespoke proper torsion which differs due to expansion
+                        # but otherwise raise an error
+                        if type(parameter).__name__ == "ProperTorsionType" and "bespoke" not in parameter.id.lower():
+                            continue
+                        else:
+                            logger.error(
+                                f"Parameter {parameter.smirks} from {ff_name} has different keys than the parameter in the base force field."
+                            )
+                            raise ValueError(
+                                f"Parameter {parameter.smirks} from {ff_name} has different keys than the parameter in the base force field."
+                            )
+
+                    if not all(
+                        parameter.to_dict()[key] == original_param.to_dict()[key]
+                        for key in original_keys
+                    ):
+                        logger.error(
+                            f"Parameter {parameter.smirks} from {ff_name}: {parameter.to_dict()} is not identical to the parameter in the base force field: {original_param.to_dict()}"
+                        )
+                        # raise ValueError(
+                        #     f"Parameter {parameter.smirks} from {ff_name}: {parameter.to_dict()} is not identical to the parameter in the base force field: {original_param.to_dict()}"
+                        # )
                     continue
 
                 # Raise an error if a parameter is already present in the combined force field
@@ -89,10 +105,9 @@ def combine_force_fields(
                     logger.error(
                         f"New parameter {parameter} is not identical to existing parameter with the same SMIRKS: {current_new_params}"
                     )
-                    continue
-                    # raise ValueError(
-                    #     f"New parameter ID {parameter.id} {parameter} already exists in the combined force field."
-                    # )
+                    raise ValueError(
+                        f"New parameter ID {parameter.id} {parameter} already exists in the combined force field."
+                    )
 
                 combined_handler.add_parameter(parameter.to_dict())
 

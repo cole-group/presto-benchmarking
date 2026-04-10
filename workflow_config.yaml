@@ -64,6 +64,12 @@ yammbs_analysis:
             #- "input_ff/de-force_unconstrained-1.0.3.offxml"
           # - "garnet"
           - "input_ff/aceff20.offxml"
+    jacs_fragments_full_mol_fits:
+      test:
+        extra_force_fields:
+          - "input_ff/bespokefit1_sage_jacs_frags.offxml"
+          - "input_ff/esp04.offxml"
+          # - "input_ff/aceff20.offxml"
 
 # Folmsbee conformer benchmark analysis configuration
 folmsbee_analysis:
