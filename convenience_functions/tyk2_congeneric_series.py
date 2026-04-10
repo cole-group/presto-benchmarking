@@ -242,8 +242,8 @@ def prepare_tyk2_congeneric_retrain_configs(
     if include_sage_types:
         settings = WorkflowSettings.from_yaml(base_config_path)
         settings.n_iterations = 1
-        settings.parameterisation_settings.initial_force_field = str(initial_force_field.resolve())
-        # Note we keep MSM here as we can't read MSM values from any precomputed FF.
+        # Note we keep Sage as the initial force field and rerun MSM
+        # as we can't read MSM values from any precomputed FF.
         settings.parameterisation_settings.type_generation_settings = {}
         settings.training_sampling_settings = PreComputedDatasetSettings(dataset_paths=training_dataset_paths)
         settings.testing_sampling_settings = PreComputedDatasetSettings(dataset_paths=testing_dataset_paths)
@@ -295,26 +295,26 @@ def analyse_tyk2_congeneric_retrains(
     sage_fit_dir = retrain_root_dir / "max_extend_sage_types"
     if sage_fit_dir.exists():
         for repeat in range(1, repeats + 1):
-            fit_dir = sage_fit_dir / f"run_{repeat:02d}"
+            fit_dir = sage_fit_dir / f"run_{repeat}"
             if not fit_dir.exists():
                 raise FileNotFoundError(f"Missing Sage Types retrain fit directory: {fit_dir}")
             run_specs.append(
                 _RunSpec(
                     max_extend_distance=_SAGE_TYPES_SENTINEL,
-                    run_id=f"run_{repeat:02d}",
+                    run_id=f"run_{repeat}",
                     fit_dir=fit_dir,
                 )
             )
 
     for max_extend_distance in max_extend_distances:
         for repeat in range(1, repeats + 1):
-            fit_dir = retrain_root_dir / f"max_extend_{max_extend_distance}" / f"run_{repeat:02d}"
+            fit_dir = retrain_root_dir / f"max_extend_{max_extend_distance}" / f"run_{repeat}"
             if not fit_dir.exists():
                 raise FileNotFoundError(f"Missing retrain fit directory: {fit_dir}")
             run_specs.append(
                 _RunSpec(
                     max_extend_distance=max_extend_distance,
-                    run_id=f"run_{repeat:02d}",
+                    run_id=f"run_{repeat}",
                     fit_dir=fit_dir,
                 )
             )
