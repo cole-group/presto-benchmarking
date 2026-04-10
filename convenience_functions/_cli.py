@@ -496,6 +496,14 @@ def prepare_tyk2_congeneric_retrain_configs_cli(
         "--max-extend-distance",
         help="Max extend distance to apply to all valence handlers (repeatable)",
     ),
+    include_sage_types: bool = typer.Option(
+        True,
+        "--include-sage-types/--exclude-sage-types",
+        help=(
+            "Also generate a retrain config with empty type_generation_settings "
+            "to keep only Sage input types"
+        ),
+    ),
 ) -> None:
     """Generate PRESTO retraining configs that reuse precomputed data from the initial run."""
     from convenience_functions.tyk2_congeneric_series import (
@@ -507,6 +515,7 @@ def prepare_tyk2_congeneric_retrain_configs_cli(
         initial_run_dir=initial_run_dir,
         output_dir=output_dir,
         max_extend_distances=max_extend_distances,
+        include_sage_types=include_sage_types,
     )
 
 

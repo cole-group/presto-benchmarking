@@ -15,6 +15,7 @@ from presto.settings import PreComputedDatasetSettings, WorkflowSettings
 
 
 _VALENCE_TYPES = ("Bonds", "Angles", "ProperTorsions", "ImproperTorsions")
+_SAGE_TYPES_SENTINEL = -2
 
 
 @dataclass(frozen=True)
@@ -111,56 +112,69 @@ def _read_stage_errors(path_manager: object) -> tuple[pd.DataFrame, np.ndarray, 
 
 
 def _format_extend_label(max_extend_distance: int) -> str:
-    return "-1 (bespoke)" if max_extend_distance == -1 else str(max_extend_distance)
+    if max_extend_distance == _SAGE_TYPES_SENTINEL:
+        return "Sage Types"
+    if max_extend_distance == -1:
+        return "Whole Molecule"
+    return str(max_extend_distance)
 
 
-def _plot_metric_vs_max_extend(
+def _plot_metrics_vs_max_extend(
     per_run_df: pd.DataFrame,
-    value_column: str,
-    ylabel: str,
     output_path: Path,
 ) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
+    # Sort order: Sage Types first, then non-negative values, then Whole Molecule rightmost.
     order = sorted(
         per_run_df["max_extend_distance"].astype(int).unique(),
-        key=lambda value: (value != -1, value),
+        key=lambda value: (
+            value != _SAGE_TYPES_SENTINEL,
+            value == -1,
+            value,
+        ),
     )
 
-    fig, ax = plt.subplots(figsize=(8.0, 5.0))
+    metrics = [
+        ("energy_rmse_per_atom_kcal_mol", r"Per-Atom Energy RMSE / kcal mol$^{-1}$ atom$^{-1}$"),
+        ("force_rmse_kcal_mol_angstrom", r"Force RMSE / kcal mol$^{-1}$ $\AA^{-1}$"),
+    ]
 
-    sns.stripplot(
-        data=per_run_df,
-        x="max_extend_distance",
-        y=value_column,
-        order=order,
-        color="black",
-        alpha=0.55,
-        size=4,
-        jitter=0.12,
-        ax=ax,
-    )
-    sns.pointplot(
-        data=per_run_df,
-        x="max_extend_distance",
-        y=value_column,
-        order=order,
-        estimator=np.mean,
-        errorbar=("ci", 95),
-        color="tab:blue",
-        markers="o",
-        linestyles="-",
-        ax=ax,
-    )
+    with plt.style.context("ggplot"):
+        fig, axes = plt.subplots(1, 2, figsize=(14.0, 5.0))
 
-    ax.set_xlabel("Maximum Extend Distance")
-    ax.set_ylabel(ylabel)
-    ax.set_xticklabels([_format_extend_label(int(x)) for x in order])
-    ax.grid(True, axis="y", alpha=0.3)
+        for ax, (value_column, ylabel) in zip(axes, metrics):
+            sns.stripplot(
+                data=per_run_df,
+                x="max_extend_distance",
+                y=value_column,
+                order=order,
+                color="black",
+                alpha=0.55,
+                size=4,
+                jitter=0.12,
+                ax=ax,
+            )
+            sns.pointplot(
+                data=per_run_df,
+                x="max_extend_distance",
+                y=value_column,
+                order=order,
+                estimator=np.mean,
+                errorbar=("ci", 95),
+                color="tab:blue",
+                markers="o",
+                linestyles="-",
+                ax=ax,
+            )
 
-    fig.tight_layout()
-    fig.savefig(output_path, dpi=300, bbox_inches="tight")
-    plt.close(fig)
+            ax.set_xlabel("Maximum Extend Distance")
+            ax.set_ylabel(ylabel)
+            ax.set_xticklabels([_format_extend_label(int(x)) for x in order])
+
+        fig.tight_layout()
+        fig.savefig(output_path, dpi=300, bbox_inches="tight")
+        plt.close(fig)
 
 
 def prepare_tyk2_congeneric_retrain_configs(
@@ -168,6 +182,7 @@ def prepare_tyk2_congeneric_retrain_configs(
     initial_run_dir: Path,
     output_dir: Path,
     max_extend_distances: list[int],
+    include_sage_types: bool = True,
 ) -> list[Path]:
     """Create retraining configs that reuse data from an initial congeneric run."""
     if not max_extend_distances:
@@ -223,6 +238,21 @@ def prepare_tyk2_congeneric_retrain_configs(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     generated: list[Path] = []
+
+    if include_sage_types:
+        settings = WorkflowSettings.from_yaml(base_config_path)
+        settings.n_iterations = 1
+        settings.parameterisation_settings.initial_force_field = str(initial_force_field.resolve())
+        settings.parameterisation_settings.msm_settings = None
+        # Explicitly disable generated types to keep Sage input types only.
+        settings.parameterisation_settings.type_generation_settings = {}
+        settings.training_sampling_settings = PreComputedDatasetSettings(dataset_paths=training_dataset_paths)
+        settings.testing_sampling_settings = PreComputedDatasetSettings(dataset_paths=testing_dataset_paths)
+
+        config_out = output_dir / "max_extend_sage_types.yaml"
+        settings.to_yaml(config_out)
+        generated.append(config_out)
+
     for max_extend_distance in max_extend_distances:
         settings = WorkflowSettings.from_yaml(base_config_path)
         settings.n_iterations = 1
@@ -263,6 +293,20 @@ def analyse_tyk2_congeneric_retrains(
         raise ValueError("max_extend_distances must be non-empty")
 
     run_specs: list[_RunSpec] = [_RunSpec(max_extend_distance=-1, run_id="initial", fit_dir=initial_run_dir)]
+    sage_fit_dir = retrain_root_dir / "max_extend_sage_types"
+    if sage_fit_dir.exists():
+        for repeat in range(1, repeats + 1):
+            fit_dir = sage_fit_dir / f"run_{repeat:02d}"
+            if not fit_dir.exists():
+                raise FileNotFoundError(f"Missing Sage Types retrain fit directory: {fit_dir}")
+            run_specs.append(
+                _RunSpec(
+                    max_extend_distance=_SAGE_TYPES_SENTINEL,
+                    run_id=f"run_{repeat:02d}",
+                    fit_dir=fit_dir,
+                )
+            )
+
     for max_extend_distance in max_extend_distances:
         for repeat in range(1, repeats + 1):
             fit_dir = retrain_root_dir / f"max_extend_{max_extend_distance}" / f"run_{repeat:02d}"
@@ -325,7 +369,16 @@ def analyse_tyk2_congeneric_retrains(
             force_rmse_mean=("force_rmse_kcal_mol_angstrom", "mean"),
             force_rmse_std=("force_rmse_kcal_mol_angstrom", "std"),
         )
-        .sort_values("max_extend_distance", key=lambda s: s.map(lambda v: (v != -1, v)))
+        .sort_values(
+            "max_extend_distance",
+            key=lambda s: s.map(
+                lambda v: (
+                    v != _SAGE_TYPES_SENTINEL,
+                    v == -1,
+                    v,
+                )
+            ),
+        )
     )
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -333,15 +386,7 @@ def analyse_tyk2_congeneric_retrains(
     per_molecule_df.to_csv(output_dir / "retrain_error_per_molecule.csv", index=False)
     summary_df.to_csv(output_dir / "retrain_error_summary.csv", index=False)
 
-    _plot_metric_vs_max_extend(
+    _plot_metrics_vs_max_extend(
         per_run_df=per_run_df,
-        value_column="energy_rmse_per_atom_kcal_mol",
-        ylabel=r"Per-Atom Energy RMSE / kcal mol$^{-1}$ atom$^{-1}$",
-        output_path=output_dir / "energy_error_vs_max_extend_distance.png",
-    )
-    _plot_metric_vs_max_extend(
-        per_run_df=per_run_df,
-        value_column="force_rmse_kcal_mol_angstrom",
-        ylabel=r"Force RMSE / kcal mol$^{-1}$ $\AA^{-1}$",
-        output_path=output_dir / "force_error_vs_max_extend_distance.png",
+        output_path=output_dir / "error_vs_max_extend_distance.png",
     )

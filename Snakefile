@@ -119,6 +119,17 @@ def protein_torsion_combined_ff(wildcards: Any) -> str:
         f"{wildcards.dataset_type}/{wildcards.config_name}/combined_force_field.offxml"
     )
 
+
+def tyk2_congeneric_retrain_labels() -> list[str]:
+    """Return retrain labels including Sage-only typing baseline."""
+    labels = [
+        str(distance)
+        for distance in config["tyk2_congeneric_series"].get(
+            "retrain_max_extend_distances", [0, 1, 2, 3]
+        )
+    ]
+    return ["sage_types", *labels]
+
 ############ Workflow Rules #############
 
 
@@ -149,6 +160,8 @@ rule all:
         "benchmarking/analysis/smiles_descriptors/smiles_descriptor_aggregate_mean_std.tex",
         # TYK2 reproducibility parameter variability analysis
         "benchmarking/tyk2_reproducibility/analysis/parameter_variability/offxml_variability_summary.tex",
+        # TYK2 congeneric series retrain analysis
+        "benchmarking/tyk2_congeneric_series/analysis/retrain_error_summary.csv",
 
 
 ############ General Rules #############
@@ -296,9 +309,7 @@ rule create_tyk2_congeneric_series_retrain_configs:
     output:
         expand(
             "benchmarking/tyk2_congeneric_series/retrain_configs/max_extend_{max_extend}.yaml",
-            max_extend=config["tyk2_congeneric_series"].get(
-                "retrain_max_extend_distances", [0, 1, 2, 3]
-            ),
+            max_extend=tyk2_congeneric_retrain_labels(),
         ),
     params:
         max_extend_opts=lambda wc: " ".join(
@@ -311,7 +322,7 @@ rule create_tyk2_congeneric_series_retrain_configs:
         "pixi run -e default presto-benchmark prepare-tyk2-congeneric-retrain-configs "
         "{input.base_config_file} benchmarking/tyk2_congeneric_series/output "
         "benchmarking/tyk2_congeneric_series/retrain_configs "
-        "{params.max_extend_opts}"
+        "{params.max_extend_opts} --include-sage-types"
 
 
 rule run_tyk2_congeneric_series_retrain:
@@ -344,9 +355,7 @@ rule analyse_tyk2_congeneric_series_retrains:
                 "benchmarking/tyk2_congeneric_series/retrains/max_extend_{max_extend}/"
                 "run_{repeat:02d}/training_iteration_1/bespoke_ff.offxml"
             ),
-            max_extend=config["tyk2_congeneric_series"].get(
-                "retrain_max_extend_distances", [0, 1, 2, 3]
-            ),
+            max_extend=tyk2_congeneric_retrain_labels(),
             repeat=range(
                 1, 1 + 1
             ),
@@ -355,8 +364,7 @@ rule analyse_tyk2_congeneric_series_retrains:
         per_run_csv="benchmarking/tyk2_congeneric_series/analysis/retrain_error_per_run.csv",
         per_molecule_csv="benchmarking/tyk2_congeneric_series/analysis/retrain_error_per_molecule.csv",
         summary_csv="benchmarking/tyk2_congeneric_series/analysis/retrain_error_summary.csv",
-        energy_plot_png="benchmarking/tyk2_congeneric_series/analysis/energy_error_vs_max_extend_distance.png",
-        force_plot_png="benchmarking/tyk2_congeneric_series/analysis/force_error_vs_max_extend_distance.png",
+        error_plot_png="benchmarking/tyk2_congeneric_series/analysis/error_vs_max_extend_distance.png",
     params:
         max_extend_opts=lambda wc: " ".join(
             f"--max-extend-distance {distance}"
