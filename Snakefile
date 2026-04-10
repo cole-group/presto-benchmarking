@@ -249,10 +249,54 @@ rule run_tyk2_congeneric_series:
             f"configs/{config['tyk2_congeneric_series'].get('config_name', 'one_it')}.yaml"
         ),
     output:
-        "benchmarking/tyk2_congeneric_series/output/bespoke_force_field.offxml",
+        "benchmarking/tyk2_congeneric_series/output/training_iteration_1/bespoke_ff.offxml",
+    resources:
+        mem_mb=8000,
+        runtime=240,  # minutes
+        slurm_partition="gpu-s_free",
+        slurm_extra="--gpus-per-task=1",
+    shell:
+        "pixi run -e default presto-benchmark run-presto "
+        "{input.config_file} {input.smiles_file} benchmarking/tyk2_congeneric_series/output"
+
+
+rule create_tyk2_congeneric_series_retrain_configs:
+    input:
+        initial_run_offxml=rules.run_tyk2_congeneric_series.output[0],
+        base_config_file=lambda wc: (
+            f"configs/{config['tyk2_congeneric_series'].get('config_name', 'one_it')}.yaml"
+        ),
+    output:
+        expand(
+            "benchmarking/tyk2_congeneric_series/retrain_configs/max_extend_{max_extend}.yaml",
+            max_extend=config["tyk2_congeneric_series"].get(
+                "retrain_max_extend_distances", [0, 1, 2, 3]
+            ),
+        ),
     params:
-        pixi_environment=lambda wc: config["tyk2_congeneric_series"].get(
-            "pixi_environment", "default"
+        max_extend_opts=lambda wc: " ".join(
+            f"--max-extend-distance {distance}"
+            for distance in config["tyk2_congeneric_series"].get(
+                "retrain_max_extend_distances", [0, 1, 2, 3]
+            )
+        ),
+    shell:
+        "pixi run -e default presto-benchmark prepare-tyk2-congeneric-retrain-configs "
+        "{input.base_config_file} benchmarking/tyk2_congeneric_series/output "
+        "benchmarking/tyk2_congeneric_series/retrain_configs "
+        "{params.max_extend_opts}"
+
+
+rule run_tyk2_congeneric_series_retrain:
+    input:
+        smiles_file=rules.create_tyk2_congeneric_series_smiles.output[0],
+        config_file=(
+            "benchmarking/tyk2_congeneric_series/retrain_configs/max_extend_{max_extend}.yaml"
+        ),
+    output:
+        (
+            "benchmarking/tyk2_congeneric_series/retrains/max_extend_{max_extend}/"
+            "run_{repeat}/training_iteration_1/bespoke_ff.offxml"
         ),
     resources:
         mem_mb=8000,
@@ -260,8 +304,46 @@ rule run_tyk2_congeneric_series:
         slurm_partition="gpu-s_free",
         slurm_extra="--gpus-per-task=1",
     shell:
-        "pixi run -e {params.pixi_environment} presto-benchmark run-presto "
-        "{input.config_file} {input.smiles_file} benchmarking/tyk2_congeneric_series/output"
+        "pixi run -e default presto-benchmark run-presto "
+        "{input.config_file} {input.smiles_file} "
+        "benchmarking/tyk2_congeneric_series/retrains/max_extend_{wildcards.max_extend}/run_{wildcards.repeat}"
+
+
+rule analyse_tyk2_congeneric_series_retrains:
+    input:
+        initial_run_offxml=rules.run_tyk2_congeneric_series.output[0],
+        retrain_outputs=expand(
+            (
+                "benchmarking/tyk2_congeneric_series/retrains/max_extend_{max_extend}/"
+                "run_{repeat:02d}/training_iteration_1/bespoke_ff.offxml"
+            ),
+            max_extend=config["tyk2_congeneric_series"].get(
+                "retrain_max_extend_distances", [0, 1, 2, 3]
+            ),
+            repeat=range(
+                1, 1 + 1
+            ),
+        ),
+    output:
+        per_run_csv="benchmarking/tyk2_congeneric_series/analysis/retrain_error_per_run.csv",
+        per_molecule_csv="benchmarking/tyk2_congeneric_series/analysis/retrain_error_per_molecule.csv",
+        summary_csv="benchmarking/tyk2_congeneric_series/analysis/retrain_error_summary.csv",
+        energy_plot_png="benchmarking/tyk2_congeneric_series/analysis/energy_error_vs_max_extend_distance.png",
+        force_plot_png="benchmarking/tyk2_congeneric_series/analysis/force_error_vs_max_extend_distance.png",
+    params:
+        max_extend_opts=lambda wc: " ".join(
+            f"--max-extend-distance {distance}"
+            for distance in config["tyk2_congeneric_series"].get(
+                "retrain_max_extend_distances", [0, 1, 2, 3]
+            )
+        ),
+    shell:
+        "pixi run -e default presto-benchmark analyse-tyk2-congeneric-retrains "
+        "benchmarking/tyk2_congeneric_series/output "
+        "benchmarking/tyk2_congeneric_series/retrains "
+        "benchmarking/tyk2_congeneric_series/analysis "
+        "--repeats 1 "
+        "{params.max_extend_opts}"
 
 
 rule analyse_smiles_descriptors:

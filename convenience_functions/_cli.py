@@ -486,5 +486,55 @@ def analyse_presto_fits_cli(
     )
 
 
+@app.command("prepare-tyk2-congeneric-retrain-configs")
+def prepare_tyk2_congeneric_retrain_configs_cli(
+    base_config_path: Path = typer.Argument(..., help="Path to initial TYK2 congeneric PRESTO config"),
+    initial_run_dir: Path = typer.Argument(..., help="Directory of the completed initial TYK2 congeneric run"),
+    output_dir: Path = typer.Argument(..., help="Directory for generated retraining config files"),
+    max_extend_distances: list[int] = typer.Option(
+        [0, 1, 2, 3],
+        "--max-extend-distance",
+        help="Max extend distance to apply to all valence handlers (repeatable)",
+    ),
+) -> None:
+    """Generate PRESTO retraining configs that reuse precomputed data from the initial run."""
+    from convenience_functions.tyk2_congeneric_series import (
+        prepare_tyk2_congeneric_retrain_configs,
+    )
+
+    prepare_tyk2_congeneric_retrain_configs(
+        base_config_path=base_config_path,
+        initial_run_dir=initial_run_dir,
+        output_dir=output_dir,
+        max_extend_distances=max_extend_distances,
+    )
+
+
+@app.command("analyse-tyk2-congeneric-retrains")
+def analyse_tyk2_congeneric_retrains_cli(
+    initial_run_dir: Path = typer.Argument(..., help="Directory of the completed initial TYK2 congeneric run"),
+    retrain_root_dir: Path = typer.Argument(..., help="Root directory containing retrain outputs by max_extend_distance"),
+    output_dir: Path = typer.Argument(..., help="Directory for analysis outputs"),
+    repeats: int = typer.Option(..., min=1, help="Number of repeated retrains per max extend distance"),
+    max_extend_distances: list[int] = typer.Option(
+        [0, 1, 2, 3],
+        "--max-extend-distance",
+        help="Max extend distance values that were retrained (repeatable)",
+    ),
+) -> None:
+    """Analyse TYK2 congeneric retrain errors against the reused MLP test set."""
+    from convenience_functions.tyk2_congeneric_series import (
+        analyse_tyk2_congeneric_retrains,
+    )
+
+    analyse_tyk2_congeneric_retrains(
+        initial_run_dir=initial_run_dir,
+        retrain_root_dir=retrain_root_dir,
+        output_dir=output_dir,
+        max_extend_distances=max_extend_distances,
+        repeats=repeats,
+    )
+
+
 if __name__ == "__main__":
     app()

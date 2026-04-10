@@ -116,5 +116,5 @@ tyk2_congeneric_series:
     - "c1(c(c(c(c(c1[H])Cl)C(=O)N(c1c(c(nc(c1[H])N(C(=O)c1c(c(c(c(c1[H])[H])[H])[H])[H])[H])[H])[H])[H])Cl)[H])[H]"
     - "c1(c(c(c(c(c1[H])Cl)C(=O)N(c1c(c(nc(c1[H])N(C(=O)C([H])([H])C1([H])C(C1([H])[H])([H])[H])[H])[H])[H])[H])Cl)[H])[H]"
   config_name: "one_it_aimnet2"
-  pixi_environment: "default"
+  retrain_max_extend_distances: [0, 1, 2, 3]
 
