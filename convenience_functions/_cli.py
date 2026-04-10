@@ -536,5 +536,37 @@ def analyse_tyk2_congeneric_retrains_cli(
     )
 
 
+@app.command("analyse-tyk2-reproducibility")
+def analyse_tyk2_reproducibility_cli(
+    output_root_dir: Path = typer.Argument(
+        ..., help="Directory containing TYK2 reproducibility run_XX outputs"
+    ),
+    analysis_output_dir: Path = typer.Argument(
+        ..., help="Directory for reproducibility analysis outputs"
+    ),
+    sample_every_n_epochs: int = typer.Option(
+        50,
+        min=1,
+        help="Checkpoint sampling interval in epochs (first and last always included)",
+    ),
+    run_ids: list[str] = typer.Option(
+        [],
+        "--run-id",
+        help="Specific run directory names to include, e.g. run_01 (repeatable)",
+    ),
+) -> None:
+    """Analyse TYK2 reproducibility parameter variability across repeated runs."""
+    from convenience_functions.tyk2_reproducibility import (
+        analyse_tyk2_reproducibility_parameter_variability,
+    )
+
+    analyse_tyk2_reproducibility_parameter_variability(
+        output_root_dir=output_root_dir,
+        analysis_output_dir=analysis_output_dir,
+        sample_every_n_epochs=sample_every_n_epochs,
+        run_ids=run_ids or None,
+    )
+
+
 if __name__ == "__main__":
     app()

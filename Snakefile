@@ -147,6 +147,8 @@ rule all:
         # smiles.csv descriptor analysis aggregate
         "benchmarking/analysis/smiles_descriptors/smiles_descriptor_aggregate_mean_std.csv",
         "benchmarking/analysis/smiles_descriptors/smiles_descriptor_aggregate_mean_std.tex",
+        # TYK2 reproducibility parameter variability analysis
+        "benchmarking/tyk2_reproducibility/analysis/parameter_variability/offxml_variability_summary.tex",
 
 
 ############ General Rules #############
@@ -226,6 +228,31 @@ rule run_tyk2_reproducibility:
         "pixi run -e {params.pixi_environment} presto-benchmark run-presto "
         "{input.config_file} {input.smiles_file} benchmarking/tyk2_reproducibility/output/run_$i; "
         "done"
+
+
+rule analyse_tyk2_reproducibility:
+    input:
+        rules.run_tyk2_reproducibility.output
+    output:
+        "benchmarking/tyk2_reproducibility/analysis/parameter_variability/offxml_parameter_values.csv",
+        "benchmarking/tyk2_reproducibility/analysis/parameter_variability/offxml_variability_summary.csv",
+        "benchmarking/tyk2_reproducibility/analysis/parameter_variability/offxml_variability_summary.tex",
+        "benchmarking/tyk2_reproducibility/analysis/parameter_variability/offxml_parameter_values_boxplot.png",
+        "benchmarking/tyk2_reproducibility/analysis/parameter_variability/offxml_parameter_values_boxplot_shifted.png",
+        "benchmarking/tyk2_reproducibility/analysis/parameter_variability/tensor_parameter_trajectories.csv",
+        "benchmarking/tyk2_reproducibility/analysis/parameter_variability/tensor_mean_signed_change_vs_epoch.png",
+        "benchmarking/tyk2_reproducibility/analysis/parameter_variability/tensor_mean_absolute_change_vs_epoch.png",
+        "benchmarking/tyk2_reproducibility/analysis/parameter_variability/tensor_individual_trajectories.png",
+        "benchmarking/tyk2_reproducibility/analysis/parameter_variability/tensor_individual_trajectories_unshifted.png",
+    params:
+        sample_every_n_epochs=lambda wc: config["tyk2_reproducibility"].get(
+            "sample_every_n_epochs", 50
+        ),
+    shell:
+        "pixi run -e default presto-benchmark analyse-tyk2-reproducibility "
+        "benchmarking/tyk2_reproducibility/output "
+        "benchmarking/tyk2_reproducibility/analysis/parameter_variability "
+        "--sample-every-n-epochs {params.sample_every_n_epochs}"
 
 
 rule create_tyk2_congeneric_series_smiles:
