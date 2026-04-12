@@ -33,7 +33,6 @@ crest = "*"
 statannotations = "*"
 pingouin = ">=0.5.5,<0.6"
 openmmforcefields = ">=0.15.1,<0.16"
-openeye-toolkits = ">=2025.2.1,<2026"
 ruff = "*"
 mypy = "*"
 pre-commit = "*"
@@ -85,6 +84,9 @@ presto = { git = "https://github.com/cole-group/presto.git", rev = "1aa5eb6c743f
 [tool.pixi.feature.presto-save-ff-trajectory.pypi-dependencies]
 presto = { git = "https://github.com/cole-group/presto.git", rev = "15d11cf9649df5a1497973cd413d2f354ba7e76c" }
 
+[tool.pixi.feature.openeye.dependencies]
+openeye-toolkits = ">=2025.2.1,<2026"
+
 [tool.pixi.feature.espaloma.dependencies]
 espaloma = ">=0.3.1"
 
@@ -99,9 +101,10 @@ igraph = "*"
 
 
 [tool.pixi.environments]
-default = {features = ["common", "standard", "garnet", "presto-default"]}
-default-save-ff-trajectory = {features = ["common", "standard", "garnet", "presto-save-ff-trajectory"]}
-espaloma = {features = ["common", "espaloma", "presto-default"]}
+default = {features = ["common", "standard", "garnet", "presto-default", "openeye"]}
+default-save-ff-trajectory = {features = ["common", "standard", "garnet", "presto-save-ff-trajectory", "openeye"]}
+espaloma = {features = ["common", "espaloma", "presto-default", "openeye"]}
+no-openeye = {features = ["common", "standard", "garnet", "presto-default"]}
 
 [tool.setuptools.package-dir]
 "presto_benchmark" = "convenience_functions"
