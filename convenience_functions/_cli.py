@@ -66,6 +66,11 @@ def get_qca_torsion_input_cli(
     exclude_smiles: list[str] = typer.Option(
         [], "--exclude-smiles", help="SMILES of a molecule to exclude (repeatable)"
     ),
+    qcarchive_ids: list[int] = typer.Option(
+        [],
+        "--qcarchive-id",
+        help="QCArchive record ID to retain (repeatable)",
+    ),
 ) -> None:
     """Retrieve QCA torsion input data."""
     from convenience_functions.get_qca_input import get_qca_torsion_input
@@ -74,6 +79,7 @@ def get_qca_torsion_input_cli(
         dataset_name=dataset_name,
         json_output_path=json_output_path,
         exclude_smiles=exclude_smiles or None,
+        include_qcarchive_ids=qcarchive_ids or None,
     )
 
 

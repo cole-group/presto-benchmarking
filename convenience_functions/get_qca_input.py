@@ -22,6 +22,7 @@ def get_qca_torsion_input(
     json_output_path: Path,
     spec_name: str = "default",
     exclude_smiles: list[str] | None = None,
+    include_qcarchive_ids: list[int] | None = None,
 ) -> None:
     """Download a torsion dataset from QCArchive and save it as JSON.
 
@@ -30,6 +31,9 @@ def get_qca_torsion_input(
     exclude_smiles:
         SMILES of molecules to exclude before saving.  Useful for removing
         known-bad molecules from a dataset.
+    include_qcarchive_ids:
+        Optional list of QCArchive record IDs to retain. If provided, only
+        torsion records whose ``qcarchive_id`` is in this list are saved.
     """
     cache_dir = json_output_path.parent / ".cache"
     cache_dir.mkdir(exist_ok=True, parents=True)
@@ -51,6 +55,20 @@ def get_qca_torsion_input(
         )
 
     dataset = QCArchiveTorsionDataset.from_qcsubmit_collection(dataset)
+
+    if include_qcarchive_ids:
+        selected_ids = {int(record_id) for record_id in include_qcarchive_ids}
+        n_before = len(dataset.qm_torsions)
+        filtered_torsions = [
+            torsion
+            for torsion in dataset.qm_torsions
+            if int(torsion.qcarchive_id) in selected_ids
+        ]
+        dataset = dataset.model_copy(update={"qm_torsions": filtered_torsions})
+        n_after = len(filtered_torsions)
+        loguru.logger.info(
+            f"Retained {n_after}/{n_before} torsion records after QCArchive ID filtering."
+        )
 
     with open(json_output_path, "w") as f:
         f.write(dataset.model_dump_json())

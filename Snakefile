@@ -12,6 +12,7 @@ TNET500_REOPT_V4_QCA_DATASET = "TorsionNet500 Re-optimization TorsionDrives v4.0
 QCA_DATASET_NAMES = {
     "jacs_fragments": "OpenFF-benchmark-ligand-fragments-v2.0",
     "jacs_fragments_full_mol_fits": "OpenFF-benchmark-ligand-fragments-v2.0",
+    "phosphate_torsion_drives": "OpenFF Lipid Torsion Drives v4.0",
     "1mer_backbone": "OpenFF Protein Dipeptide 2-D TorsionDrive v2.0",
     "3mer_backbone": "OpenFF Protein Capped 3-mer Backbones v1.0",
     "1mer_side_chain": "OpenFF Protein Capped 1-mer Sidechains v1.3",
@@ -66,17 +67,15 @@ def smiles_csv_input(wildcards: Any) -> str:
     """Resolve smiles.csv path for a dataset/split after the relevant checkpoint."""
     dataset = wildcards.dataset
 
-    if dataset == "tnet500":
-        checkpoints.split_tnet500_input.get()
-        return f"benchmarking/{dataset}/input/{wildcards.dataset_type}/smiles.csv"
+    if dataset != "folmsbee_conformers":
+        checkpoint_obj = getattr(checkpoints, f"split_{dataset}_input", None)
+        checkpoint_kwargs: dict = {}
+        if checkpoint_obj is None:
+            checkpoint_obj = checkpoints.split_test_only_input
+            checkpoint_kwargs = {"dataset": dataset}
 
-    checkpoint_obj = getattr(checkpoints, f"split_{dataset}_input", None)
-    checkpoint_kwargs: dict = {}
-    if checkpoint_obj is None:
-        checkpoint_obj = checkpoints.split_test_only_input
-        checkpoint_kwargs = {"dataset": dataset}
+        checkpoint_obj.get(**checkpoint_kwargs)
 
-    checkpoint_obj.get(**checkpoint_kwargs)
     return f"benchmarking/{dataset}/input/{wildcards.dataset_type}/smiles.csv"
 
 
@@ -94,6 +93,12 @@ def qca_exclude_smiles_opts(dataset_name: str) -> str:
     """Return --exclude-smiles CLI flags for a QCA dataset, from workflow_config.yaml."""
     smiles = config.get("exclude_smiles", {}).get(dataset_name, [])
     return " ".join(f"--exclude-smiles '{s}'" for s in smiles)
+
+
+def qca_include_ids_opts(dataset_name: str) -> str:
+    """Return --qcarchive-id CLI flags for a QCA dataset, from workflow_config.yaml."""
+    include_ids = config.get("include_qcarchive_ids", {}).get(dataset_name, [])
+    return " ".join(f"--qcarchive-id {record_id}" for record_id in include_ids)
 
 
 def full_molecule_fit_force_field_map(wildcards: Any | None = None) -> dict[str, str]:
@@ -175,6 +180,8 @@ rule all:
         "benchmarking/tnet500/output/test/default/combined_force_field.offxml",
         # JACS Fragments
         "benchmarking/jacs_fragments/output/test/default/combined_force_field.offxml",
+        # Phosphate torsion drives
+        "benchmarking/phosphate_torsion_drives/output/test/default/combined_force_field.offxml",
         # Folmsbee conformer analysis
         "benchmarking/folmsbee_conformers/analysis/test/default/aggregate_stats.csv",
         # yammbs torsion analyses
@@ -183,6 +190,7 @@ rule all:
         "benchmarking/tnet500_reopt_v4/analysis/test/default/metrics.json",
         "benchmarking/tnet500_reopt_v4/analysis/validation/ablations/metrics.json",
         "benchmarking/jacs_fragments/analysis/test/default/metrics.json",
+        "benchmarking/phosphate_torsion_drives/analysis/test/default/metrics.json",
         # JACS Fragments full-molecule fits transfer benchmark (per supplied FF)
         expand(
             "benchmarking/jacs_fragments_full_mol_fits/analysis/test/{ff_label}/metrics.json",
@@ -426,7 +434,7 @@ rule analyse_smiles_descriptors:
         mean_std_tex="benchmarking/{dataset}/input/{dataset_type}/smiles_descriptor_mean_std.tex",
         plots_dir=directory("benchmarking/{dataset}/input/{dataset_type}/smiles_descriptor_plots"),
     wildcard_constraints:
-        dataset="tnet500|jacs_fragments|jacs_fragments_full_mol_fits|1mer_backbone|3mer_backbone|1mer_side_chain",
+        dataset="tnet500|jacs_fragments|phosphate_torsion_drives|1mer_backbone|3mer_backbone|1mer_side_chain|folmsbee_conformers",
         dataset_type="test|validation",
     shell:
         "pixi run -e default presto-benchmark analyse-smiles-descriptors {input.smiles_csv}"
@@ -437,6 +445,7 @@ rule aggregate_smiles_descriptors:
         tnet500_test="benchmarking/tnet500/input/test/smiles_descriptor_summary.csv",
         tnet500_validation="benchmarking/tnet500/input/validation/smiles_descriptor_summary.csv",
         jacs_test="benchmarking/jacs_fragments/input/test/smiles_descriptor_summary.csv",
+        folmsbee_test="benchmarking/folmsbee_conformers/input/test/smiles_descriptor_summary.csv",
     output:
         aggregate_csv="benchmarking/analysis/smiles_descriptors/smiles_descriptor_aggregate_mean_std.csv",
         aggregate_tex="benchmarking/analysis/smiles_descriptors/smiles_descriptor_aggregate_mean_std.tex",
@@ -446,7 +455,8 @@ rule aggregate_smiles_descriptors:
         "pixi run -e default presto-benchmark aggregate-smiles-descriptors {params.output_dir} "
         "benchmarking/tnet500/input/test/smiles.csv "
         "benchmarking/tnet500/input/validation/smiles.csv "
-        "benchmarking/jacs_fragments/input/test/smiles.csv"
+        "benchmarking/jacs_fragments/input/test/smiles.csv "
+        "benchmarking/folmsbee_conformers/input/test/smiles.csv"
 
 rule analyse_torsion_scans_yammbs:
     input:
@@ -462,7 +472,7 @@ rule analyse_torsion_scans_yammbs:
         fit_rmse_summary_csv="benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/plots/presto_fit_validation_energy_rmse_summary.csv",
         fit_rmse_summary_tex="benchmarking/{dataset}/analysis/{dataset_type}/{config_name}/plots/presto_fit_validation_energy_rmse_summary.tex",
     wildcard_constraints:
-        dataset="tnet500|tnet500_reopt_v4|jacs_fragments",
+        dataset="tnet500|tnet500_reopt_v4|jacs_fragments|phosphate_torsion_drives",
     params:
         analysis_dir=lambda wc: f"benchmarking/{wc.dataset}/analysis/{wc.dataset_type}/{wc.config_name}",
         presto_output_dir=lambda wc: f"benchmarking/{wc.dataset}/output/{wc.dataset_type}/{wc.config_name}",
@@ -506,6 +516,29 @@ checkpoint process_folmsbee_smiles:
     shell:
         "pixi run -e default presto-benchmark process-folmsbee-smiles "
         "{input.gh_repo}/SMILES/molecules.smi {output}"
+
+
+rule create_folmsbee_smiles_csv:
+    input:
+        smiles_dir=rules.process_folmsbee_smiles.output[0]
+    output:
+        "benchmarking/folmsbee_conformers/input/test/smiles.csv"
+    run:
+        smiles_files = sorted(Path(input.smiles_dir).glob("*.smi"))
+        if not smiles_files:
+            raise ValueError(
+                f"No .smi files found in {input.smiles_dir}; cannot create smiles.csv"
+            )
+
+        output_path = Path(output[0])
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with output_path.open("w") as handle:
+            handle.write("smiles\n")
+            for smiles_file in smiles_files:
+                smiles = smiles_file.read_text().strip()
+                if not smiles:
+                    raise ValueError(f"Empty SMILES file encountered: {smiles_file}")
+                handle.write(f"{smiles}\n")
 
 
 rule analyse_folmsbee_conformers:
@@ -764,9 +797,10 @@ rule get_qca_torsion_input_dataset:
     params:
         qca_dataset_name=lambda wc: QCA_DATASET_NAMES[wc.dataset],
         exclude_opts=lambda wc: qca_exclude_smiles_opts(QCA_DATASET_NAMES[wc.dataset]),
+        include_id_opts=lambda wc: qca_include_ids_opts(QCA_DATASET_NAMES[wc.dataset]),
     shell:
         "pixi run -e default presto-benchmark get-qca-torsion-input "
-        "'{params.qca_dataset_name}' {output[0]} {params.exclude_opts}"
+        "'{params.qca_dataset_name}' {output[0]} {params.exclude_opts} {params.include_id_opts}"
 
 
 rule filter_jacs_fragments_full_mol_fits_torsions_per_force_field:
@@ -815,7 +849,7 @@ rule analyse_jacs_fragments_full_mol_fits_per_force_field:
             ].get("torsion_plot_ids", [])
         ),
     shell:
-        "pixi run -e default presto-benchmark analyse-torsion-scans "
+        "pixi run -e no-openeye presto-benchmark analyse-torsion-scans "
         "{input.qca_data_json} {input.force_field} {params.analysis_dir} "
         "{params.base_ff_opts} {params.extra_ff_opts} {params.torsion_plot_id_opts}"
 

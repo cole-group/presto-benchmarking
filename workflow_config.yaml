@@ -10,6 +10,13 @@ exclude_smiles:
     # Has a weird H bonded directly to S (breaks ELF-10; no atom type for this H)
     - "[H:9][c:8]1[c:6]([c:5]([c:47]([c:45]([c:10]1[N:11]([H:44])[c:12]2[n:38][c:37]3[c:36]([c:14]([n:13]2)[O:15][C:16]([H:34])([H:35])[C:17]4([C:19]([C:22]([C:25]([C:28]([C:31]4([H:32])[H:33])([H:29])[H:30])([H:26])[H:27])([H:23])[H:24])([H:20])[H:21])[H:18])[N:43]=[C:41]([N:39]3[H:40])[H:42])[H:46])[H:48])[S:2](=[O:3])(=[O:4])[H:1])[H:7]"
 
+# Optional QCArchive record ID inclusion filter for downloaded datasets.
+# Keyed by QCArchive dataset name (must match the name passed to get-qca-torsion-input).
+include_qcarchive_ids:
+  "OpenFF Lipid Torsion Drives v4.0":
+    - 146649921
+    # - 146649941
+
 # TNet500 dataset splitting
 tnet500_frac_test: 0.8  # 20% validation, 80% test
 
@@ -64,6 +71,9 @@ yammbs_analysis:
             #- "input_ff/de-force_unconstrained-1.0.3.offxml"
           # - "garnet"
           - "input_ff/aceff20.offxml"
+    phosphate_torsion_drives:
+      test:
+        extra_force_fields: []
     jacs_fragments_full_mol_fits:
       test:
         extra_force_fields:
@@ -79,7 +89,7 @@ folmsbee_analysis:
     - "[SX4](=[OX1])(=[OX1])[NX3]"
     - "[SX4](=[OX1])(=[OX1])[NX2]"
   min_conformers_per_molecule: 5
-  min_reference_energy_window: 1.0
+  min_reference_energy_window: 0.0
   precomputed_methods:
     - "mp2"
     - "wb97"
@@ -87,7 +97,7 @@ folmsbee_analysis:
   mlp_names: ["aimnet2", "aceff-2.0"]
   single_point_mlp: true
   torsion_restraint_force_constant: 100000
-  mm_minimization_steps: -1
+  mm_minimization_steps: 0
   n_processes: null
   targets:
     test:
