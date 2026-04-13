@@ -1118,7 +1118,6 @@ def _plot_rmse_vs_nonbonded_range(
                     hue="force_field", style="force_field", s=60, alpha=0.85, ax=ax)
     ax.set_xlabel("Non-bonded energy range across conformers / kcal mol$^{-1}$")
     ax.set_ylabel("RMSE / kcal mol$^{-1}$")
-    ax.set_title("Per-molecule RMSE vs non-bonded energy range")
     fig.tight_layout()
     fig.savefig(output_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
@@ -1194,6 +1193,7 @@ def _build_ff_metric_dataframe(
     method_names: list[str],
     reference_method: str,
     smiles_by_molecule: dict[str, str],
+    shared_molecule_methods: list[str] = ["presto", "aimnet2", "espaloma", "openff23"]
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     rmse_lookup = (
         per_molecule_stats_df[["molecule", "method", "rmse_kcal_mol"]]
@@ -1210,9 +1210,23 @@ def _build_ff_metric_dataframe(
         else pd.Series(dtype=float)
     )
 
+    methods_enforce_shared_molecules = [m for m in method_names if _method_key(m) in shared_molecule_methods]
+    molecules_by_method: dict[str, set[str]] = {}
+    for method_name in methods_enforce_shared_molecules:
+        valid = results_df[["name", method_name, reference_method]].dropna()
+        counts = valid.groupby("name").size()
+        molecules_by_method[method_name] = set(counts[counts >= 2].index.tolist())
+
+    shared_molecules = (
+        set.intersection(*molecules_by_method.values()) if molecules_by_method else set()
+    )
+
     rows: list[dict] = []
     presto_vs_aimnet2_rows: list[dict] = []
     for molecule, group in results_df.groupby("name", sort=False):
+        if molecule not in shared_molecules:
+            continue
+
         for method_name in method_names:
             method_key = _method_key(method_name)
             if method_key is None:
@@ -1262,6 +1276,12 @@ def _build_ff_metric_dataframe(
 
     ff_metric_df = pd.DataFrame(rows)
     presto_vs_aimnet2_df = pd.DataFrame(presto_vs_aimnet2_rows)
+
+    if not presto_vs_aimnet2_df.empty:
+        presto_vs_aimnet2_df = presto_vs_aimnet2_df[
+            presto_vs_aimnet2_df["molecule"].isin(shared_molecules)
+        ].copy()
+
     return ff_metric_df, presto_vs_aimnet2_df
 
 
@@ -1422,7 +1442,6 @@ def _plot_paired_metrics_vs_qm(
         ax.set_xlabel("Method")
         ax.grid(alpha=0.25)
 
-    fig.suptitle("Paired Per-Molecule Metrics vs QM", y=1.03)
     fig.tight_layout()
     _save_figure_if_missing(fig, output_path)
 
@@ -1488,6 +1507,7 @@ def _save_summary_table_latex(
         output_path.write_text(summary_df.to_latex(index=False, escape=False))
     else:
         logger.info(f"Skipping existing output: {output_path}")
+
     return summary_df
 
 
@@ -1540,7 +1560,7 @@ def _save_outlier_tables_and_grid(
             continue
         mols.append(mol)
         legends.append(
-            f"{row['molecule']}\\nRMSE: {float(row['presto_rmse_to_qm_kcal_mol']):.2f} kcal/mol"
+            f"{row['molecule']}\nRMSE: {float(row['presto_rmse_to_qm_kcal_mol']):.2f} kcal/mol"
         )
 
     if not mols:
@@ -1624,9 +1644,6 @@ def _plot_paired_rmse_vs_reference_window(
     ax.set_xscale("log")
     ax.set_xlabel("Reference Energy Window (max-min) / kcal mol$^{-1}$")
     ax.set_ylabel("RMSE to QM / kcal mol$^{-1}$")
-    ax.set_title(
-        f"RMSE vs Reference Energy Window: {_METHOD_DISPLAY_NAMES[left_method]} vs {_METHOD_DISPLAY_NAMES[right_method]}"
-    )
     ax.grid(alpha=0.25)
     ax.legend(frameon=True, loc="upper left")
     fig.tight_layout()
