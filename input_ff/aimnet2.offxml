@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<SMIRNOFF version="0.3" aromaticity_model="OEAroModel_MDL">
+    <Author>The Open Force Field Initiative</Author>
+    <Date>2024-09-11</Date>
+    <Constraints version="0.3">
+        <Constraint smirks="[#1:1]-[#8X2H2+0:2]-[#1]" id="c-tip3p-H-O" distance="0.9572 * angstrom ** 1"></Constraint>
+        <Constraint smirks="[#1:1]-[#8X2H2+0]-[#1:2]" id="c-tip3p-H-O-H" distance="1.5139006545247014 * angstrom ** 1"></Constraint>
+    </Constraints>
+    <vdW version="0.4" potential="Lennard-Jones-12-6" combining_rules="Lorentz-Berthelot" scale12="0.0" scale13="0.0" scale14="0.5" scale15="1.0" cutoff="9.0 * angstrom ** 1" switch_width="1.0 * angstrom ** 1" periodic_method="cutoff" nonperiodic_method="no-cutoff">
+        <Atom smirks="[#1:1]" epsilon="0.0157 * kilocalorie ** 1 * mole ** -1" id="n1" rmin_half="0.6 * angstrom ** 1"></Atom>
+        <Atom smirks="[#1:1]-[#6X4]" epsilon="0.01577948280971 * kilocalorie ** 1 * mole ** -1" id="n2" rmin_half="1.48419980825 * angstrom ** 1"></Atom>
+        <Atom smirks="[#1:1]-[#6X4]-[#7,#8,#9,#16,#17,#35]" epsilon="0.01640924602775 * kilocalorie ** 1 * mole ** -1" id="n3" rmin_half="1.449786411317 * angstrom ** 1"></Atom>
+        <Atom smirks="[#1:1]-[#6X4](-[#7,#8,#9,#16,#17,#35])-[#7,#8,#9,#16,#17,#35]" epsilon="0.0157 * kilocalorie ** 1 * mole ** -1" id="n4" rmin_half="1.287 * angstrom ** 1"></Atom>
+        <Atom smirks="[#1:1]-[#6X4](-[#7,#8,#9,#16,#17,#35])(-[#7,#8,#9,#16,#17,#35])-[#7,#8,#9,#16,#17,#35]" epsilon="0.0157 * kilocalorie ** 1 * mole ** -1" id="n5" rmin_half="1.187 * angstrom ** 1"></Atom>
+        <Atom smirks="[#1:1]-[#6X4]~[*+1,*+2]" epsilon="0.0157 * kilocalorie ** 1 * mole ** -1" id="n6" rmin_half="1.1 * angstrom ** 1"></Atom>
+        <Atom smirks="[#1:1]-[#6X3]" epsilon="0.01561134320353 * kilocalorie ** 1 * mole ** -1" id="n7" rmin_half="1.443812569645 * angstrom ** 1"></Atom>
+        <Atom smirks="[#1:1]-[#6X3]~[#7,#8,#9,#16,#17,#35]" epsilon="0.01310699839698 * kilocalorie ** 1 * mole ** -1" id="n8" rmin_half="1.377051329051 * angstrom ** 1"></Atom>
+        <Atom smirks="[#1:1]-[#6X3](~[#7,#8,#9,#16,#17,#35])~[#7,#8,#9,#16,#17,#35]" epsilon="0.01479744504464 * kilocalorie ** 1 * mole ** -1" id="n9" rmin_half="1.370482808197 * angstrom ** 1"></Atom>
+        <Atom smirks="[#1:1]-[#6X2]" epsilon="0.015 * kilocalorie ** 1 * mole ** -1" id="n10" rmin_half="1.459 * angstrom ** 1"></Atom>
+        <Atom smirks="[#1:1]-[#7]" epsilon="0.01409081474669 * kilocalorie ** 1 * mole ** -1" id="n11" rmin_half="0.6192778454102 * angstrom ** 1"></Atom>
+        <Atom smirks="[#1:1]-[#8]" epsilon="1.232599966667e-05 * kilocalorie ** 1 * mole ** -1" id="n12" rmin_half="0.2999999999997 * angstrom ** 1"></Atom>
+        <Atom smirks="[#1:1]-[#16]" epsilon="0.0157 * kilocalorie ** 1 * mole ** -1" id="n13" rmin_half="0.6 * angstrom ** 1"></Atom>
+        <Atom smirks="[#6:1]" epsilon="0.0868793154488 * kilocalorie ** 1 * mole ** -1" id="n14" rmin_half="1.953447017081 * angstrom ** 1"></Atom>
+        <Atom smirks="[#6X2:1]" epsilon="0.21 * kilocalorie ** 1 * mole ** -1" id="n15" rmin_half="1.908 * angstrom ** 1"></Atom>
+        <Atom smirks="[#6X4:1]" epsilon="0.1088406109251 * kilocalorie ** 1 * mole ** -1" id="n16" rmin_half="1.896698071741 * angstrom ** 1"></Atom>
+        <Atom smirks="[#8:1]" epsilon="0.2102061007896 * kilocalorie ** 1 * mole ** -1" id="n17" rmin_half="1.706036917087 * angstrom ** 1"></Atom>
+        <Atom smirks="[#8X2H0+0:1]" epsilon="0.1684651402602 * kilocalorie ** 1 * mole ** -1" id="n18" rmin_half="1.697783613804 * angstrom ** 1"></Atom>
+        <Atom smirks="[#8X2H1+0:1]" epsilon="0.2094735324129 * kilocalorie ** 1 * mole ** -1" id="n19" rmin_half="1.682099169199 * angstrom ** 1"></Atom>
+        <Atom smirks="[#7:1]" epsilon="0.1676915150424 * kilocalorie ** 1 * mole ** -1" id="n20" rmin_half="1.799798315098 * angstrom ** 1"></Atom>
+        <Atom smirks="[#16:1]" epsilon="0.25 * kilocalorie ** 1 * mole ** -1" id="n21" rmin_half="2.0 * angstrom ** 1"></Atom>
+        <Atom smirks="[#15:1]" epsilon="0.2 * kilocalorie ** 1 * mole ** -1" id="n22" rmin_half="2.1 * angstrom ** 1"></Atom>
+        <Atom smirks="[#9:1]" epsilon="0.061 * kilocalorie ** 1 * mole ** -1" id="n23" rmin_half="1.75 * angstrom ** 1"></Atom>
+        <Atom smirks="[#17:1]" epsilon="0.2656001046527 * kilocalorie ** 1 * mole ** -1" id="n24" rmin_half="1.85628721824 * angstrom ** 1"></Atom>
+        <Atom smirks="[#35:1]" epsilon="0.3218986365974 * kilocalorie ** 1 * mole ** -1" id="n25" rmin_half="1.969806594135 * angstrom ** 1"></Atom>
+        <Atom smirks="[#53:1]" epsilon="0.4 * kilocalorie ** 1 * mole ** -1" id="n26" rmin_half="2.35 * angstrom ** 1"></Atom>
+        <Atom smirks="[#3+1:1]" epsilon="0.0279896 * kilocalorie ** 1 * mole ** -1" id="n27" rmin_half="1.025 * angstrom ** 1"></Atom>
+        <Atom smirks="[#11+1:1]" epsilon="0.0874393 * kilocalorie ** 1 * mole ** -1" id="n28" rmin_half="1.369 * angstrom ** 1"></Atom>
+        <Atom smirks="[#19+1:1]" epsilon="0.1936829 * kilocalorie ** 1 * mole ** -1" id="n29" rmin_half="1.705 * angstrom ** 1"></Atom>
+        <Atom smirks="[#37+1:1]" epsilon="0.3278219 * kilocalorie ** 1 * mole ** -1" id="n30" rmin_half="1.813 * angstrom ** 1"></Atom>
+        <Atom smirks="[#55+1:1]" epsilon="0.4065394 * kilocalorie ** 1 * mole ** -1" id="n31" rmin_half="1.976 * angstrom ** 1"></Atom>
+        <Atom smirks="[#9X0-1:1]" epsilon="0.003364 * kilocalorie ** 1 * mole ** -1" id="n32" rmin_half="2.303 * angstrom ** 1"></Atom>
+        <Atom smirks="[#17X0-1:1]" epsilon="0.035591 * kilocalorie ** 1 * mole ** -1" id="n33" rmin_half="2.513 * angstrom ** 1"></Atom>
+        <Atom smirks="[#35X0-1:1]" epsilon="0.0586554 * kilocalorie ** 1 * mole ** -1" id="n34" rmin_half="2.608 * angstrom ** 1"></Atom>
+        <Atom smirks="[#53X0-1:1]" epsilon="0.0536816 * kilocalorie ** 1 * mole ** -1" id="n35" rmin_half="2.86 * angstrom ** 1"></Atom>
+        <Atom smirks="[#1]-[#8X2H2+0:1]-[#1]" epsilon="0.1521 * kilocalorie ** 1 * mole ** -1" id="n-tip3p-O" sigma="3.1507 * angstrom ** 1"></Atom>
+        <Atom smirks="[#1:1]-[#8X2H2+0]-[#1]" epsilon="0.0 * kilocalorie ** 1 * mole ** -1" id="n-tip3p-H" sigma="1 * angstrom ** 1"></Atom>
+        <Atom smirks="[#54:1]" epsilon="0.561 * kilocalorie ** 1 * mole ** -1" id="n36" sigma="4.363 * angstrom ** 1"></Atom>
+    </vdW>
+    <Electrostatics version="0.4" scale12="0.0" scale13="0.0" scale14="0.8333333333" scale15="1.0" cutoff="9.0 * angstrom ** 1" switch_width="0.0 * angstrom ** 1" periodic_potential="Ewald3D-ConductingBoundary" nonperiodic_potential="Coulomb" exception_potential="Coulomb"></Electrostatics>
+    <LibraryCharges version="0.3">
+        <LibraryCharge smirks="[#3+1:1]" charge1="1.0 * elementary_charge ** 1" id="Li+"></LibraryCharge>
+        <LibraryCharge smirks="[#11+1:1]" charge1="1.0 * elementary_charge ** 1" id="Na+"></LibraryCharge>
+        <LibraryCharge smirks="[#19+1:1]" charge1="1.0 * elementary_charge ** 1" id="K+"></LibraryCharge>
+        <LibraryCharge smirks="[#37+1:1]" charge1="1.0 * elementary_charge ** 1" id="Rb+"></LibraryCharge>
+        <LibraryCharge smirks="[#55+1:1]" charge1="1.0 * elementary_charge ** 1" id="Cs+"></LibraryCharge>
+        <LibraryCharge smirks="[#9X0-1:1]" charge1="-1.0 * elementary_charge ** 1" id="F-"></LibraryCharge>
+        <LibraryCharge smirks="[#17X0-1:1]" charge1="-1.0 * elementary_charge ** 1" id="Cl-"></LibraryCharge>
+        <LibraryCharge smirks="[#35X0-1:1]" charge1="-1.0 * elementary_charge ** 1" id="Br-"></LibraryCharge>
+        <LibraryCharge smirks="[#53X0-1:1]" charge1="-1.0 * elementary_charge ** 1" id="I-"></LibraryCharge>
+        <LibraryCharge smirks="[#1]-[#8X2H2+0:1]-[#1]" charge1="-0.834 * elementary_charge ** 1" id="q-tip3p-O"></LibraryCharge>
+        <LibraryCharge smirks="[#1:1]-[#8X2H2+0]-[#1]" charge1="0.417 * elementary_charge ** 1" id="q-tip3p-H"></LibraryCharge>
+        <LibraryCharge smirks="[#54:1]" charge1="0.0 * elementary_charge ** 1" id="Xe"></LibraryCharge>
+    </LibraryCharges>
+    <NAGLCharges model_file="openff-gnn-am1bcc-1.0.0.pt" model_file_hash="7981e7f5b0b1e424c9e10a40d9e7606d96dcd3dd2b095cb4eeff6829f92238ee" version="0.3"></NAGLCharges>
+    <OpenmmmlValence model_name="aimnet2" version="0.3"></OpenmmmlValence>
+</SMIRNOFF>
