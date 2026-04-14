@@ -27,6 +27,61 @@ PLOT_OUTPUT_NAME = "descriptor_distributions.png"
 AGGREGATE_OUTPUT_NAME = "smiles_descriptor_aggregate_mean_std.csv"
 AGGREGATE_LATEX_OUTPUT_NAME = "smiles_descriptor_aggregate_mean_std.tex"
 
+DESCRIPTOR_COLUMNS = [
+    "heavy_atom_count",
+    "rotatable_bond_count",
+    "formal_charge",
+    "exact_mol_wt",
+    "hbond_donor_count",
+    "hbond_acceptor_count",
+    "ring_count",
+    "aromatic_ring_count",
+    "tpsa",
+    "logp",
+    "fraction_csp3",
+]
+
+SUMMARY_STATS = ["mean", "std", "min", "max"]
+
+DESCRIPTOR_DISPLAY_NAMES = {
+    "heavy_atom_count": "Heavy Atom Count",
+    "rotatable_bond_count": "Rotatable Bond Count",
+    "formal_charge": "Formal Charge",
+    "exact_mol_wt": "Exact Molecular Weight",
+    "hbond_donor_count": "H-Bond Donor Count",
+    "hbond_acceptor_count": "H-Bond Acceptor Count",
+    "ring_count": "Ring Count",
+    "aromatic_ring_count": "Aromatic Ring Count",
+    "tpsa": "Topological Polar Surface Area",
+    "logp": "LogP",
+    "fraction_csp3": "Fraction Csp3",
+}
+
+DESCRIPTOR_DECIMALS = {
+    "heavy_atom_count": 0,
+    "rotatable_bond_count": 0,
+    "formal_charge": 0,
+    "hbond_donor_count": 0,
+    "hbond_acceptor_count": 0,
+    "ring_count": 0,
+    "aromatic_ring_count": 0,
+    "exact_mol_wt": 2,
+    "tpsa": 2,
+    "logp": 2,
+    "fraction_csp3": 2,
+}
+
+DATASET_DISPLAY_NAMES = {
+    ("tnet500", "test"): "TorsionNet500 Test",
+    ("tnet500", "validation"): "TorsionNet500 Validation",
+    ("jacs_fragments", "test"): "JACS Fragments Test",
+    ("folmsbee_conformers", "test"): "Folmsbee Test",
+    ("phosphate_torsion_drives", "test"): "Phosphate Torsion Drives Test",
+    ("1mer_backbone", "test"): "Protein 1mer Backbone Test",
+    ("3mer_backbone", "test"): "Protein 3mer Backbone Test",
+    ("1mer_side_chain", "test"): "Protein 1mer Side Chain Test",
+}
+
 
 def _strip_atom_map_numbers(smiles: str) -> str:
     """Remove atom-map numbers from mapped SMILES strings."""
@@ -117,22 +172,8 @@ def _validate_and_parse_molecules(smiles_df: pd.DataFrame) -> tuple[list[Chem.Mo
 
 def _build_summary_tables(descriptor_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Build descriptor summary tables with mean and standard deviation."""
-    numeric_cols = [
-        "heavy_atom_count",
-        "rotatable_bond_count",
-        "formal_charge",
-        "exact_mol_wt",
-        "hbond_donor_count",
-        "hbond_acceptor_count",
-        "ring_count",
-        "aromatic_ring_count",
-        "tpsa",
-        "logp",
-        "fraction_csp3",
-    ]
-
     summary_df = (
-        descriptor_df[numeric_cols]
+        descriptor_df[DESCRIPTOR_COLUMNS]
         .agg(["count", "mean", "std", "min", "max"])
         .transpose()
         .reset_index()
@@ -165,25 +206,11 @@ def _save_descriptor_plots(descriptor_df: pd.DataFrame, output_dir: Path) -> Non
     plot_dir = output_dir / PLOTS_DIR_NAME
     plot_dir.mkdir(parents=True, exist_ok=True)
 
-    numeric_cols = [
-        "heavy_atom_count",
-        "rotatable_bond_count",
-        "formal_charge",
-        "exact_mol_wt",
-        "hbond_donor_count",
-        "hbond_acceptor_count",
-        "ring_count",
-        "aromatic_ring_count",
-        "tpsa",
-        "logp",
-        "fraction_csp3",
-    ]
-
     sns.set_theme(style="whitegrid")
     fig, axes = plt.subplots(4, 3, figsize=(16, 16))
     axes_flat = axes.flatten()
 
-    for idx, col in enumerate(numeric_cols):
+    for idx, col in enumerate(DESCRIPTOR_COLUMNS):
         ax = axes_flat[idx]
         sns.histplot(descriptor_df[col], bins=20, kde=True, ax=ax, color="#1f77b4")
         ax.set_title(col)
@@ -246,31 +273,75 @@ def analyse_smiles_files(smiles_csv_paths: list[Path], output_dir: Path) -> pd.D
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    dataset_order: list[str] = []
     aggregate_rows: list[dict[str, int | float | str]] = []
     for smiles_csv_path in smiles_csv_paths:
         _, summary_df, _ = analyse_smiles_file(smiles_csv_path)
 
-        aggregate_row: dict[str, int | float | str] = {
-            "smiles_csv": str(smiles_csv_path)
-        }
-        for _, descriptor_row in summary_df.iterrows():
-            descriptor = descriptor_row["descriptor"]
-            aggregate_row[f"{descriptor}_mean"] = descriptor_row["mean"]
-            aggregate_row[f"{descriptor}_std"] = descriptor_row["std"]
-        aggregate_rows.append(aggregate_row)
+        path_parts = smiles_csv_path.parts
+        dataset_label = str(smiles_csv_path)
+        if len(path_parts) >= 4:
+            dataset_name = path_parts[-4]
+            dataset_type = path_parts[-2]
+            dataset_label = DATASET_DISPLAY_NAMES.get(
+                (dataset_name, dataset_type),
+                f"{dataset_name.replace('_', ' ').title()} {dataset_type.title()}",
+            )
+
+        dataset_order.append(dataset_label)
+
+        descriptor_rows = summary_df.set_index("descriptor")
+        for descriptor in DESCRIPTOR_COLUMNS:
+            row = descriptor_rows.loc[descriptor]
+            aggregate_rows.append(
+                {
+                    "dataset": dataset_label,
+                    "descriptor": descriptor,
+                    "mean": float(row["mean"]),
+                    "std": float(row["std"]),
+                    "min": float(row["min"]),
+                    "max": float(row["max"]),
+                }
+            )
 
     aggregate_df = pd.DataFrame(aggregate_rows)
 
-    global_numeric = aggregate_df.select_dtypes(include=["number"]) 
-    global_row: dict[str, int | float | str] = {"smiles_csv": "__GLOBAL__"}
-    for col in global_numeric.columns:
-        global_row[col] = global_numeric[col].mean()
+    aggregate_df.to_csv(output_dir / AGGREGATE_OUTPUT_NAME, index=False)
 
-    aggregate_df = pd.concat([aggregate_df, pd.DataFrame([global_row])], ignore_index=True)
-    _write_dataframe_csv_and_latex(
-        aggregate_df,
-        output_dir / AGGREGATE_OUTPUT_NAME,
-        output_dir / AGGREGATE_LATEX_OUTPUT_NAME,
+    pivot_df = (
+        aggregate_df.set_index(["descriptor", "dataset"])[SUMMARY_STATS]
+        .unstack("dataset")
+        .swaplevel(0, 1, axis=1)
     )
+
+    ordered_columns = pd.MultiIndex.from_product([dataset_order, SUMMARY_STATS])
+    pivot_df = pivot_df.reindex(columns=ordered_columns)
+
+    formatted_df = pd.DataFrame(index=pivot_df.index, columns=pivot_df.columns, dtype=object)
+    for descriptor in pivot_df.index:
+        decimals = DESCRIPTOR_DECIMALS.get(descriptor, 2)
+        for dataset_label, stat_name in pivot_df.columns:
+            value = pivot_df.loc[descriptor, (dataset_label, stat_name)]
+            formatted_df.loc[descriptor, (dataset_label, stat_name)] = (
+                "" if pd.isna(value) else f"{float(value):.{decimals}f}"
+            )
+
+    formatted_df.index = pd.Index(
+        [
+            DESCRIPTOR_DISPLAY_NAMES.get(
+                descriptor, descriptor.replace("_", " ").title()
+            )
+            for descriptor in formatted_df.index
+        ],
+        name="Descriptor",
+    )
+
+    n_data_columns = len(formatted_df.columns)
+    latex_content = formatted_df.to_latex(
+        escape=False,
+        multicolumn=True,
+        column_format="l" + ("r" * n_data_columns),
+    )
+    (output_dir / AGGREGATE_LATEX_OUTPUT_NAME).write_text(latex_content)
 
     return aggregate_df

@@ -446,6 +446,12 @@ rule aggregate_smiles_descriptors:
         tnet500_validation="benchmarking/tnet500/input/validation/smiles_descriptor_summary.csv",
         jacs_test="benchmarking/jacs_fragments/input/test/smiles_descriptor_summary.csv",
         folmsbee_test="benchmarking/folmsbee_conformers/input/test/smiles_descriptor_summary.csv",
+        smiles_csvs=[
+            "benchmarking/tnet500/input/test/smiles.csv",
+            "benchmarking/tnet500/input/validation/smiles.csv",
+            "benchmarking/jacs_fragments/input/test/smiles.csv",
+            "benchmarking/folmsbee_conformers/input/test/smiles.csv",
+        ],
     output:
         aggregate_csv="benchmarking/analysis/smiles_descriptors/smiles_descriptor_aggregate_mean_std.csv",
         aggregate_tex="benchmarking/analysis/smiles_descriptors/smiles_descriptor_aggregate_mean_std.tex",
@@ -453,10 +459,7 @@ rule aggregate_smiles_descriptors:
         output_dir="benchmarking/analysis/smiles_descriptors",
     shell:
         "pixi run -e default presto-benchmark aggregate-smiles-descriptors {params.output_dir} "
-        "benchmarking/tnet500/input/test/smiles.csv "
-        "benchmarking/tnet500/input/validation/smiles.csv "
-        "benchmarking/jacs_fragments/input/test/smiles.csv "
-        "benchmarking/folmsbee_conformers/input/test/smiles.csv"
+        "{input.smiles_csvs}"
 
 rule analyse_torsion_scans_yammbs:
     input:
