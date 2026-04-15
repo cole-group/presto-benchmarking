@@ -15,6 +15,8 @@ import seaborn as sns
 from rdkit import Chem
 from rdkit.Chem import Crippen, Descriptors, Lipinski, rdMolDescriptors
 
+from convenience_functions._plotting_defaults import get_dataset_display_name
+
 SMILES_COLUMN = "smiles"
 PER_MOLECULE_OUTPUT_NAME = "smiles_descriptors.csv"
 SUMMARY_OUTPUT_NAME = "smiles_descriptor_summary.csv"
@@ -69,17 +71,6 @@ DESCRIPTOR_DECIMALS = {
     "tpsa": 2,
     "logp": 2,
     "fraction_csp3": 2,
-}
-
-DATASET_DISPLAY_NAMES = {
-    ("tnet500", "test"): "TorsionNet500 Test",
-    ("tnet500", "validation"): "TorsionNet500 Validation",
-    ("jacs_fragments", "test"): "JACS Fragments Test",
-    ("folmsbee_conformers", "test"): "Folmsbee Test",
-    ("phosphate_torsion_drives", "test"): "Phosphate Torsion Drives Test",
-    ("1mer_backbone", "test"): "Protein 1mer Backbone Test",
-    ("3mer_backbone", "test"): "Protein 3mer Backbone Test",
-    ("1mer_side_chain", "test"): "Protein 1mer Side Chain Test",
 }
 
 
@@ -283,10 +274,7 @@ def analyse_smiles_files(smiles_csv_paths: list[Path], output_dir: Path) -> pd.D
         if len(path_parts) >= 4:
             dataset_name = path_parts[-4]
             dataset_type = path_parts[-2]
-            dataset_label = DATASET_DISPLAY_NAMES.get(
-                (dataset_name, dataset_type),
-                f"{dataset_name.replace('_', ' ').title()} {dataset_type.title()}",
-            )
+            dataset_label = get_dataset_display_name(dataset_name, dataset_type)
 
         dataset_order.append(dataset_label)
 

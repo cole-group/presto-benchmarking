@@ -199,6 +199,9 @@ rule all:
         # smiles.csv descriptor analysis aggregate
         "benchmarking/analysis/smiles_descriptors/smiles_descriptor_aggregate_mean_std.csv",
         "benchmarking/analysis/smiles_descriptors/smiles_descriptor_aggregate_mean_std.tex",
+        # Validation fit error summary aggregate
+        "benchmarking/analysis/presto_fit_validation/presto_fit_validation_error_aggregate.csv",
+        "benchmarking/analysis/presto_fit_validation/presto_fit_validation_error_aggregate.tex",
         # TYK2 reproducibility parameter variability analysis
         "benchmarking/tyk2_reproducibility/analysis/parameter_variability/offxml_variability_summary.tex",
         # TYK2 congeneric series retrain analysis
@@ -460,6 +463,26 @@ rule aggregate_smiles_descriptors:
     shell:
         "pixi run -e default presto-benchmark aggregate-smiles-descriptors {params.output_dir} "
         "{input.smiles_csvs}"
+
+
+rule aggregate_validation_fit_errors:
+    input:
+        tnet500_test="benchmarking/tnet500/analysis/test/default/plots/presto_fit_validation_energy_rmse_summary.csv",
+        # jacs_test="benchmarking/jacs_fragments/analysis/test/default/plots/presto_fit_validation_energy_rmse_summary.csv",
+        folmsbee_test="benchmarking/folmsbee_conformers/analysis/test/aimnet2/plots/presto_fit_validation_energy_rmse_summary.csv",
+        summary_csvs=[
+            "benchmarking/tnet500/analysis/test/default/plots/presto_fit_validation_energy_rmse_summary.csv",
+            # "benchmarking/jacs_fragments/analysis/test/default/plots/presto_fit_validation_energy_rmse_summary.csv",
+            "benchmarking/folmsbee_conformers/analysis/test/aimnet2/plots/presto_fit_validation_energy_rmse_summary.csv",
+        ],
+    output:
+        aggregate_csv="benchmarking/analysis/presto_fit_validation/presto_fit_validation_error_aggregate.csv",
+        aggregate_tex="benchmarking/analysis/presto_fit_validation/presto_fit_validation_error_aggregate.tex",
+    params:
+        output_dir="benchmarking/analysis/presto_fit_validation",
+    shell:
+        "pixi run -e default presto-benchmark aggregate-validation-fit-errors {params.output_dir} "
+        "{input.summary_csvs}"
 
 rule analyse_torsion_scans_yammbs:
     input:

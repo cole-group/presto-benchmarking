@@ -519,6 +519,26 @@ def analyse_presto_fits_cli(
     )
 
 
+@app.command("aggregate-validation-fit-errors")
+def aggregate_validation_fit_errors_cli(
+    output_dir: Path = typer.Argument(
+        ..., help="Directory to write aggregate validation fit error summary"
+    ),
+    summary_csv_paths: list[Path] = typer.Argument(
+        ..., help="Paths to per-dataset validation fit summary CSV files"
+    ),
+) -> None:
+    """Aggregate validation fit error summaries across datasets/configurations."""
+    from convenience_functions.presto_fitting_analysis import (
+        aggregate_validation_fit_error_summaries,
+    )
+
+    aggregate_validation_fit_error_summaries(
+        summary_csv_paths=summary_csv_paths,
+        output_dir=output_dir,
+    )
+
+
 @app.command("prepare-tyk2-congeneric-retrain-configs")
 def prepare_tyk2_congeneric_retrain_configs_cli(
     base_config_path: Path = typer.Argument(..., help="Path to initial TYK2 congeneric PRESTO config"),
