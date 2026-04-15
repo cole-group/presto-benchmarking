@@ -214,39 +214,35 @@ def _collect_offxml_records(artifacts: list[_RunArtifacts]) -> pd.DataFrame:
 
 def _compute_offxml_variability_summary(offxml_df: pd.DataFrame) -> pd.DataFrame:
     df = offxml_df.copy()
-    mean_df = (
-        df.groupby(["valence_type", "parameter_name", "parameter_id"], as_index=False)[
-            "value"
-        ]
-        .mean()
-        .rename(columns={"value": "mean_value"})
-    )
-    df = df.merge(mean_df, on=["valence_type", "parameter_name", "parameter_id"], how="left")
-
     tol = 1.0e-12
-    df["abs_diff_from_mean"] = (df["value"] - df["mean_value"]).abs()
-
-    scale_df = (
-        df.groupby(["valence_type", "parameter_name"], as_index=False)["value"]
-        .apply(lambda s: float(np.mean(np.abs(s.to_numpy(dtype=float)))))
-        .rename(columns={"value": "mean_abs_value_scale"})
+    per_parameter_df = (
+        df.groupby(["valence_type", "parameter_name", "parameter_id"], as_index=False)
+        .agg(
+            unit=("unit", "first"),
+            std_dev=("value", lambda s: float(np.std(s.to_numpy(dtype=float), ddof=0))),
+            mean_abs_value_scale=(
+                "value",
+                lambda s: float(np.mean(np.abs(s.to_numpy(dtype=float)))),
+            ),
+        )
     )
-    df = df.merge(scale_df, on=["valence_type", "parameter_name"], how="left")
-    df["is_near_zero_scale"] = df["mean_abs_value_scale"].abs() <= tol
-    df["normalised_abs_diff"] = np.where(
-        df["is_near_zero_scale"],
+    per_parameter_df["is_near_zero_scale"] = (
+        per_parameter_df["mean_abs_value_scale"].abs() <= tol
+    )
+    per_parameter_df["normalised_std_dev"] = np.where(
+        per_parameter_df["is_near_zero_scale"],
         np.nan,
-        df["abs_diff_from_mean"] / df["mean_abs_value_scale"],
+        per_parameter_df["std_dev"] / per_parameter_df["mean_abs_value_scale"],
     )
 
     summary_rows: list[dict[str, Any]] = []
-    grouped = df.groupby(["valence_type", "parameter_name"], sort=True)
+    grouped = per_parameter_df.groupby(["valence_type", "parameter_name"], sort=True)
     for (valence_type, parameter_name), sub_df in grouped:
-        valid = sub_df["normalised_abs_diff"].dropna().to_numpy(dtype=float)
-        rms_normalised_abs_diff = float(np.sqrt(np.mean(valid**2))) if valid.size else np.nan
+        valid = sub_df["normalised_std_dev"].dropna().to_numpy(dtype=float)
+        rms_normalised_std_dev = float(np.sqrt(np.mean(valid**2))) if valid.size else np.nan
 
-        abs_diff = sub_df["abs_diff_from_mean"].to_numpy(dtype=float)
-        rms_absolute = float(np.sqrt(np.mean(abs_diff**2)))
+        std_dev = sub_df["std_dev"].to_numpy(dtype=float)
+        rms_std_dev = float(np.sqrt(np.mean(std_dev**2)))
 
         summary_rows.append(
             {
@@ -254,8 +250,8 @@ def _compute_offxml_variability_summary(offxml_df: pd.DataFrame) -> pd.DataFrame
                 "parameter_name": parameter_name,
                 "unit": sub_df["unit"].iloc[0],
                 "n_parameter_ids": int(sub_df["parameter_id"].nunique()),
-                "rms_abs_diff": rms_absolute,
-                "rms_normalised_abs_diff": rms_normalised_abs_diff,
+                "rms_std_dev": rms_std_dev,
+                "rms_normalised_std_dev": rms_normalised_std_dev,
             }
         )
 
@@ -269,8 +265,8 @@ def _save_offxml_latex_table(summary_df: pd.DataFrame, output_path: Path) -> Non
             "parameter_name",
             "unit",
             "n_parameter_ids",
-            "rms_normalised_abs_diff",
-            "rms_abs_diff",
+            "rms_normalised_std_dev",
+            "rms_std_dev",
         ]
     ].rename(
         columns={
@@ -278,12 +274,18 @@ def _save_offxml_latex_table(summary_df: pd.DataFrame, output_path: Path) -> Non
             "parameter_name": "Parameter",
             "unit": "Unit",
             "n_parameter_ids": "N parameter IDs",
-            "rms_normalised_abs_diff": "RMS normalised abs diff",
-            "rms_abs_diff": "RMS abs diff",
+            "rms_normalised_std_dev": "RMS normalised std dev",
+            "rms_std_dev": "RMS std dev",
         }
     )
 
-    latex_str = table_df.to_latex(index=False, float_format=lambda x: f"{x:.2g}")
+    metric_columns = ["RMS normalised std dev", "RMS std dev"]
+    for column in metric_columns:
+        table_df[column] = table_df[column].map(
+            lambda x: "" if pd.isna(x) else f"{x:.2f}"
+        )
+
+    latex_str = table_df.to_latex(index=False)
     output_path.write_text(latex_str)
 
 
