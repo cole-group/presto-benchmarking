@@ -330,7 +330,7 @@ rule run_tyk2_congeneric_series:
     input:
         smiles_file=rules.create_tyk2_congeneric_series_smiles.output[0],
         config_file=lambda wc: (
-            f"configs/{config['tyk2_congeneric_series'].get('config_name', 'one_it')}.yaml"
+            f"configs/{config['tyk2_congeneric_series'].get('config_name', 'one_it_aimnet2_no_msm')}.yaml"
         ),
     output:
         "benchmarking/tyk2_congeneric_series/output/training_iteration_1/bespoke_ff.offxml",

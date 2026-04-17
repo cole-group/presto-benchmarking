@@ -14,8 +14,8 @@ exclude_smiles:
 # Keyed by QCArchive dataset name (must match the name passed to get-qca-torsion-input).
 include_qcarchive_ids:
   "OpenFF Lipid Torsion Drives v4.0":
-    - 146649921
-    # - 146649941
+    # - 146649921
+    - 146649941
 
 # TNet500 dataset splitting
 tnet500_frac_test: 0.8  # 20% validation, 80% test
@@ -131,6 +131,6 @@ tyk2_congeneric_series:
     - "c1(c(c(c(c(c1[H])Cl)C(=O)N(c1c(c(nc(c1[H])N(C(=O)[C@]1(C([C@]1(C([H])([H])[H])[H])([H])[H])[H])[H])[H])[H])[H])Cl)[H])[H]"
     - "c1(c(c(c(c(c1[H])Cl)C(=O)N(c1c(c(nc(c1[H])N(C(=O)c1c(c(c(c(c1[H])[H])[H])[H])[H])[H])[H])[H])[H])Cl)[H])[H]"
     - "c1(c(c(c(c(c1[H])Cl)C(=O)N(c1c(c(nc(c1[H])N(C(=O)C([H])([H])C1([H])C(C1([H])[H])([H])[H])[H])[H])[H])[H])Cl)[H])[H]"
-  config_name: "one_it_aimnet2"
+  config_name: "one_it_aimnet2_no_msm"
   retrain_max_extend_distances: [0, 1, 2, 3]
 

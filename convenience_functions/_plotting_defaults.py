@@ -33,7 +33,7 @@ FORCE_FIELD_DISPLAY_MAP: dict[str, str] = {
     "benchmarking/tnet500/output/test/default/combined_force_field.offxml": "presto",
     # JACS Fragments
     "benchmarking/jacs_fragments/output/test/default/combined_force_field.offxml": "presto",
-    "input_ff/bespokefit1_sage_jacs_frags.offxml": "OpenFF BespokeFit /\n B3LYP-D3BJ/DZVP",
+    "input_ff/bespokefit1_sage_jacs_frags.offxml": "OpenFF\nBespokeFit/\nB3LYP-D3BJ/DZVP",
 }
 
 # ---------------------------------------------------------------------------

@@ -242,8 +242,8 @@ def prepare_tyk2_congeneric_retrain_configs(
     if include_sage_types:
         settings = WorkflowSettings.from_yaml(base_config_path)
         settings.n_iterations = 1
-        # Note we keep Sage as the initial force field and rerun MSM
-        # as we can't read MSM values from any precomputed FF.
+        # Note we keep Sage as the initial force field
+        settings.parameterisation_settings.msm_settings = None
         settings.parameterisation_settings.type_generation_settings = {}
         settings.training_sampling_settings = PreComputedDatasetSettings(dataset_paths=training_dataset_paths)
         settings.testing_sampling_settings = PreComputedDatasetSettings(dataset_paths=testing_dataset_paths)
