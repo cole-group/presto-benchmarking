@@ -9,13 +9,17 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from matplotlib import pyplot as plt
-from presto.analyse import read_errors
+from presto.analyse import read_errors, read_losses
 from presto.outputs import OutputStage, OutputType, StageKind
 from presto.settings import PreComputedDatasetSettings, WorkflowSettings
 
+from convenience_functions._plotting_defaults import (
+    SAGE_TYPES_SENTINEL,
+    get_max_extend_distance_label,
+)
+
 
 _VALENCE_TYPES = ("Bonds", "Angles", "ProperTorsions", "ImproperTorsions")
-_SAGE_TYPES_SENTINEL = -2
 
 
 @dataclass(frozen=True)
@@ -112,11 +116,49 @@ def _read_stage_errors(path_manager: object) -> tuple[pd.DataFrame, np.ndarray, 
 
 
 def _format_extend_label(max_extend_distance: int) -> str:
-    if max_extend_distance == _SAGE_TYPES_SENTINEL:
-        return "Sage Types"
-    if max_extend_distance == -1:
-        return "Whole Molecule"
-    return str(max_extend_distance)
+    return get_max_extend_distance_label(max_extend_distance)
+
+
+def _read_final_losses(path_manager: object) -> dict[str, float]:
+    stage = OutputStage(StageKind.TRAINING, 1)
+    loss_path = path_manager.get_output_path(stage, OutputType.TRAINING_METRICS)
+    if not loss_path.exists():
+        raise FileNotFoundError(
+            "Expected training metrics output for iteration 1, but it is missing: "
+            f"{loss_path}"
+        )
+
+    losses = read_losses({1: loss_path})
+    if losses.empty:
+        raise ValueError(f"Training metrics file has no rows: {loss_path}")
+
+    iteration_losses = losses[losses["iteration"] == 1]
+    if iteration_losses.empty:
+        raise ValueError(
+            "Training metrics did not contain data for iteration 1: "
+            f"{loss_path}"
+        )
+
+    final_row = iteration_losses.iloc[-1]
+    required_columns = [
+        "loss_train_energy",
+        "loss_train_forces",
+        "loss_test_energy",
+        "loss_test_forces",
+    ]
+    missing_columns = [col for col in required_columns if col not in final_row.index]
+    if missing_columns:
+        raise KeyError(
+            "Training metrics file is missing required loss columns "
+            f"{missing_columns}: {loss_path}"
+        )
+
+    return {
+        "loss_train_energy": float(final_row["loss_train_energy"]),
+        "loss_train_forces": float(final_row["loss_train_forces"]),
+        "loss_test_energy": float(final_row["loss_test_energy"]),
+        "loss_test_forces": float(final_row["loss_test_forces"]),
+    }
 
 
 def _plot_metrics_vs_max_extend(
@@ -129,7 +171,7 @@ def _plot_metrics_vs_max_extend(
     order = sorted(
         per_run_df["max_extend_distance"].astype(int).unique(),
         key=lambda value: (
-            value != _SAGE_TYPES_SENTINEL,
+            value != SAGE_TYPES_SENTINEL,
             value == -1,
             value,
         ),
@@ -144,6 +186,66 @@ def _plot_metrics_vs_max_extend(
         fig, axes = plt.subplots(1, 2, figsize=(14.0, 5.0))
 
         for ax, (value_column, ylabel) in zip(axes, metrics):
+            sns.stripplot(
+                data=per_run_df,
+                x="max_extend_distance",
+                y=value_column,
+                order=order,
+                color="black",
+                alpha=0.55,
+                size=4,
+                jitter=0.12,
+                ax=ax,
+            )
+            sns.pointplot(
+                data=per_run_df,
+                x="max_extend_distance",
+                y=value_column,
+                order=order,
+                estimator=np.mean,
+                errorbar=("ci", 95),
+                color="tab:blue",
+                markers="o",
+                linestyles="-",
+                ax=ax,
+            )
+
+            ax.set_xlabel("Maximum Extend Distance")
+            ax.set_ylabel(ylabel)
+            ax.set_xticklabels([_format_extend_label(int(x)) for x in order])
+
+        fig.tight_layout()
+        fig.savefig(output_path, dpi=300, bbox_inches="tight")
+        plt.close(fig)
+
+
+def _plot_losses_vs_max_extend(
+    per_run_df: pd.DataFrame,
+    output_path: Path,
+) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Sort order: Sage Types first, then non-negative values, then Whole Molecule rightmost.
+    order = sorted(
+        per_run_df["max_extend_distance"].astype(int).unique(),
+        key=lambda value: (
+            value != SAGE_TYPES_SENTINEL,
+            value == -1,
+            value,
+        ),
+    )
+
+    metrics = [
+        ("loss_train_energy", "Final Train Energy Loss"),
+        ("loss_train_forces", "Final Train Force Loss"),
+        ("loss_test_energy", "Final Test Energy Loss"),
+        ("loss_test_forces", "Final Test Force Loss"),
+    ]
+
+    with plt.style.context("ggplot"):
+        fig, axes = plt.subplots(2, 2, figsize=(14.0, 10.0), sharex=True)
+
+        for ax, (value_column, ylabel) in zip(axes.ravel(), metrics, strict=False):
             sns.stripplot(
                 data=per_run_df,
                 x="max_extend_distance",
@@ -300,7 +402,7 @@ def analyse_tyk2_congeneric_retrains(
                 raise FileNotFoundError(f"Missing Sage Types retrain fit directory: {fit_dir}")
             run_specs.append(
                 _RunSpec(
-                    max_extend_distance=_SAGE_TYPES_SENTINEL,
+                    max_extend_distance=SAGE_TYPES_SENTINEL,
                     run_id=f"run_{repeat}",
                     fit_dir=fit_dir,
                 )
@@ -339,6 +441,7 @@ def analyse_tyk2_congeneric_retrains(
             fallback_config_path=fallback_settings_path,
         )
         per_molecule_df, energy_per_atom, force_component = _read_stage_errors(path_manager)
+        final_losses = _read_final_losses(path_manager)
 
         per_run_rows.append(
             {
@@ -347,6 +450,10 @@ def analyse_tyk2_congeneric_retrains(
                 "fit_dir": str(spec.fit_dir),
                 "energy_rmse_per_atom_kcal_mol": float(np.sqrt(np.mean(energy_per_atom**2))),
                 "force_rmse_kcal_mol_angstrom": float(np.sqrt(np.mean(force_component**2))),
+                "loss_train_energy": final_losses["loss_train_energy"],
+                "loss_train_forces": final_losses["loss_train_forces"],
+                "loss_test_energy": final_losses["loss_test_energy"],
+                "loss_test_forces": final_losses["loss_test_forces"],
             }
         )
 
@@ -372,7 +479,7 @@ def analyse_tyk2_congeneric_retrains(
             "max_extend_distance",
             key=lambda s: s.map(
                 lambda v: (
-                    v != _SAGE_TYPES_SENTINEL,
+                    v != SAGE_TYPES_SENTINEL,
                     v == -1,
                     v,
                 )
@@ -388,4 +495,9 @@ def analyse_tyk2_congeneric_retrains(
     _plot_metrics_vs_max_extend(
         per_run_df=per_run_df,
         output_path=output_dir / "error_vs_max_extend_distance.png",
+    )
+
+    _plot_losses_vs_max_extend(
+        per_run_df=per_run_df,
+        output_path=output_dir / "loss_vs_max_extend_distance.png",
     )

@@ -409,6 +409,7 @@ rule analyse_tyk2_congeneric_series_retrains:
         per_molecule_csv="benchmarking/tyk2_congeneric_series/analysis/retrain_error_per_molecule.csv",
         summary_csv="benchmarking/tyk2_congeneric_series/analysis/retrain_error_summary.csv",
         error_plot_png="benchmarking/tyk2_congeneric_series/analysis/error_vs_max_extend_distance.png",
+        loss_plot_png="benchmarking/tyk2_congeneric_series/analysis/loss_vs_max_extend_distance.png",
     params:
         max_extend_opts=lambda wc: " ".join(
             f"--max-extend-distance {distance}"

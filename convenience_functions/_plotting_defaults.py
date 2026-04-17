@@ -113,3 +113,18 @@ METRIC_CDF_XLIM: dict[str, tuple[float | None, float | None]] = {
     "rmse": (-0.3, 5.0),
     "js_distance": (None, None),
 }
+
+# ---------------------------------------------------------------------------
+# TYK2 congeneric retrain display names
+# ---------------------------------------------------------------------------
+
+SAGE_TYPES_SENTINEL = -2
+
+
+def get_max_extend_distance_label(max_extend_distance: int) -> str:
+    """Return display label for max_extend_distance settings used in TYK2 analysis."""
+    if max_extend_distance == SAGE_TYPES_SENTINEL:
+        return "Sage Types"
+    if max_extend_distance == -1:
+        return "Whole Molecule"
+    return str(max_extend_distance)
