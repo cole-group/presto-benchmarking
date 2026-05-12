@@ -134,3 +134,8 @@ tyk2_congeneric_series:
   config_name: "one_it_aimnet2_no_msm"
   retrain_max_extend_distances: [0, 1, 2, 3]
 
+# 1mer protein joint-fit benchmark configuration
+protein_1mer_joint_fit:
+  config_names:
+    - "orb_max_extend_1"
+

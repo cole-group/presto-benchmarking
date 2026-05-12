@@ -426,6 +426,106 @@ rule analyse_tyk2_congeneric_series_retrains:
         "{params.max_extend_opts}"
 
 
+rule create_1mer_backbone_joint_fit_smiles:
+    input:
+        smiles_dir=lambda wc: checkpoints.split_test_only_input.get(
+            dataset="1mer_backbone"
+        ).output.test_set_smiles,
+    output:
+        "benchmarking/1mer_backbone_joint_fit/input/1mer_backbone.smi",
+    run:
+        smiles_files = sorted(Path(input.smiles_dir).glob("*.smi"))
+        if not smiles_files:
+            raise ValueError(
+                f"No .smi files found in {input.smiles_dir}; cannot create joint-fit input"
+            )
+
+        output_path = Path(output[0])
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with output_path.open("w") as handle:
+            for smiles_file in smiles_files:
+                smiles = smiles_file.read_text().strip()
+                if not smiles:
+                    raise ValueError(f"Empty SMILES file encountered: {smiles_file}")
+                handle.write(f"{smiles}\n")
+
+
+rule run_1mer_backbone_joint_fit:
+    input:
+        smiles_file=rules.create_1mer_backbone_joint_fit_smiles.output[0],
+        config_file="configs/{config_name}.yaml",
+    output:
+        "benchmarking/1mer_backbone_joint_fit/output/{config_name}/training_iteration_1/bespoke_ff.offxml",
+    resources:
+        mem_mb=8000,
+        runtime=240,  # minutes
+        slurm_partition="gpu-s_free",
+        slurm_extra="--gpus-per-task=1",
+    shell:
+        "pixi run -e default presto-benchmark run-presto "
+        "{input.config_file} {input.smiles_file} benchmarking/1mer_backbone_joint_fit/output/{wildcards.config_name}"
+
+
+rule create_1mer_backbone_joint_fit_force_field:
+    input:
+        joint_fit_offxml=rules.run_1mer_backbone_joint_fit.output[0],
+    output:
+        "benchmarking/1mer_backbone_joint_fit/output/{config_name}/combined_force_field.offxml",
+    shell:
+        "cp {input.joint_fit_offxml} {output[0]}"
+
+
+rule run_1mer_protein_joint_fit_minimisation:
+    input:
+        qca_data_json="benchmarking/{dataset}/input/qca_data.json",
+        combined_ff="benchmarking/1mer_backbone_joint_fit/output/{config_name}/combined_force_field.offxml",
+    output:
+        directory("benchmarking/{dataset}/analysis_joint_fit/test/{config_name}/minimised"),
+    wildcard_constraints:
+        dataset="1mer_backbone|1mer_side_chain",
+    params:
+        ff_config=config["protein_force_fields"],
+    run:
+        ff_config = dict(params.ff_config)
+        ff_config[wildcards.config_name] = {
+            "ff_path": input.combined_ff,
+            "ff_type": "smirnoff-nagl",
+        }
+
+        # Write force field config to temporary JSON file
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            json.dump(ff_config, f)
+            config_path = f.name
+
+        shell(
+            f"pixi run -e espaloma presto-benchmark minimise-protein-torsion-multi "
+            f"{input.qca_data_json} {output[0]} --config {config_path}"
+        )
+
+
+rule plot_1mer_protein_joint_fit_analysis:
+    input:
+        minimised_dir="benchmarking/{dataset}/analysis_joint_fit/test/{config_name}/minimised",
+        qca_names_json="benchmarking/{dataset}/input/qca_names.json",
+    output:
+        directory("benchmarking/{dataset}/analysis_joint_fit/test/{config_name}/plots"),
+    wildcard_constraints:
+        dataset="1mer_backbone|1mer_side_chain",
+    shell:
+        "pixi run -e default presto-benchmark plot-protein-torsion {input.minimised_dir} {output[0]} "
+        "--names-file {input.qca_names_json}"
+
+
+rule benchmark_1mer_protein_joint_fit:
+    input:
+        backbone_plots="benchmarking/1mer_backbone/analysis_joint_fit/test/{config_name}/plots",
+        side_chain_plots="benchmarking/1mer_side_chain/analysis_joint_fit/test/{config_name}/plots",
+    output:
+        touch("benchmarking/1mer_backbone_joint_fit/analysis/{config_name}/benchmark_complete.txt"),
+    shell:
+        "mkdir -p $(dirname {output[0]}) && touch {output[0]}"
+
+
 rule analyse_smiles_descriptors:
     input:
         smiles_csv=smiles_csv_input,

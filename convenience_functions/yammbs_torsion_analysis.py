@@ -13,6 +13,7 @@ from matplotlib import pyplot
 
 from convenience_functions._plotting_defaults import (
     FORCE_FIELD_DISPLAY_MAP,
+    get_force_field_color_map,
     METRIC_CDF_XLIM,
     METRIC_LABELS,
     METRIC_UNITS,
@@ -82,6 +83,8 @@ def analyse_torsion_scans(
     output_metrics.parent.mkdir(parents=True, exist_ok=True)
     plot_dir.mkdir(parents=True, exist_ok=True)
 
+    color_map = get_force_field_color_map(force_fields)
+
     with open(output_minimized, "w") as file_handle:
         file_handle.write(store.get_outputs().model_dump_json())
 
@@ -89,21 +92,32 @@ def analyse_torsion_scans(
     with open(output_metrics, "w") as file_handle:
         file_handle.write(metrics.model_dump_json())
 
-    plot_cdfs(output_metrics=output_metrics, plot_dir=plot_dir)
-    plot_rms_stats(output_metrics=output_metrics, plot_dir=plot_dir)
-    plot_mean_error_distribution(output_metrics=output_metrics, plot_dir=plot_dir)
-    plot_rms_js_distance(output_metrics=output_metrics, plot_dir=plot_dir)
-    plot_paired_stats(
-        output_metrics=output_metrics, plot_dir=plot_dir, show_significance=True
+    plot_cdfs(output_metrics=output_metrics, plot_dir=plot_dir, color_map=color_map)
+    plot_rms_stats(output_metrics=output_metrics, plot_dir=plot_dir, color_map=color_map)
+    plot_mean_error_distribution(
+        output_metrics=output_metrics, plot_dir=plot_dir, color_map=color_map
+    )
+    plot_rms_js_distance(
+        output_metrics=output_metrics, plot_dir=plot_dir, color_map=color_map
     )
     plot_paired_stats(
-        output_metrics=output_metrics, plot_dir=plot_dir, show_significance=False
+        output_metrics=output_metrics,
+        plot_dir=plot_dir,
+        color_map=color_map,
+        show_significance=True,
+    )
+    plot_paired_stats(
+        output_metrics=output_metrics,
+        plot_dir=plot_dir,
+        color_map=color_map,
+        show_significance=False,
     )
     plot_requested_torsion_scans(
         store=store,
         force_fields=force_fields,
         torsion_plot_ids=torsion_plot_ids or [],
         output_dir=plot_dir / "torsion_id_scans",
+        color_map=color_map,
     )
     save_summary_table_latex(
         output_metrics=output_metrics,
@@ -434,21 +448,20 @@ def plot_requested_torsion_scans(
     force_fields: list[str],
     torsion_plot_ids: list[int],
     output_dir: Path,
+    color_map: dict[str, str] | None = None,
 ) -> None:
     """Plot scan profiles for requested torsion IDs with molecule highlights and RMSEs."""
     if len(torsion_plot_ids) == 0:
         return
 
-    from cmcrameri import cm
-    from matplotlib.colors import to_hex
     from openff.toolkit import Molecule
 
     requested_ids = list(dict.fromkeys(torsion_plot_ids))
 
     output_dir.mkdir(parents=True, exist_ok=True)
-
-    # Use six evenly spaced colors from a color-blind-friendly cmcrameri map.
-    palette = [to_hex(cm.batlow(value)) for value in np.linspace(0.1, 0.9, 6)]
+    color_map = (
+        color_map if color_map is not None else get_force_field_color_map(force_fields)
+    )
     markers = ["o", "^", "s", "D", "v", "P", "X", "<", ">", "*"]
     line_styles = ["-", "--", "-.", ":"]
 
@@ -502,9 +515,9 @@ def plot_requested_torsion_scans(
                 force_field=force_field,
             )
 
-            color = palette[index % len(palette)]
+            color = color_map[force_field]
             marker = markers[(index // 10) % len(markers)]
-            line_style = line_styles[(index // len(palette)) % len(line_styles)]
+            line_style = line_styles[index % len(line_styles)]
 
             mm_relative_energies = [
                 mm_energies[angle] - mm_energies[qm_minimum_angle]
@@ -568,12 +581,20 @@ def plot_requested_torsion_scans(
         pyplot.close(figure)
 
 
-def plot_cdfs(output_metrics: Path, plot_dir: Path) -> None:
+def plot_cdfs(
+    output_metrics: Path,
+    plot_dir: Path,
+    ff_display_names: dict[str, str] | None = None,
+    color_map: dict[str, str] | None = None,
+) -> None:
     """Plot CDFs for rmsd, rmse, and Jensen-Shannon distance."""
     metrics = MetricCollection.parse_file(output_metrics)
 
     x_ranges = METRIC_CDF_XLIM
     units = METRIC_UNITS
+    ff_display = (
+        ff_display_names if ff_display_names is not None else FORCE_FIELD_DISPLAY_MAP
+    )
 
     force_fields = list(metrics.metrics.keys())
 
@@ -603,16 +624,36 @@ def plot_cdfs(output_metrics: Path, plot_dir: Path) -> None:
         "js_distance": js_dists,
     }
 
-    for metric_name in ["rmsd", "rmse", "js_distance"]:
-        figure, axis = pyplot.subplots()
+    # Calculate RMS for each metric to determine ordering
+    rms_values = {
+        "rmsd": {ff: _get_rms(np.array([*rmsds[ff].values()])) for ff in force_fields},
+        "rmse": {ff: _get_rms(np.array([*rmses[ff].values()])) for ff in force_fields},
+        "js_distance": {
+            ff: _get_rms(np.array([*js_dists[ff].values()])) for ff in force_fields
+        },
+    }
 
-        for force_field in force_fields:
+    color_map = (
+        color_map if color_map is not None else get_force_field_color_map(force_fields)
+    )
+
+    for metric_name in ["rmsd", "rmse", "js_distance"]:
+        figure, axis = pyplot.subplots(figsize=(5, 4))
+
+        # Sort force fields by RMS of current metric (low to high)
+        ordered_ffs = sorted(
+            force_fields, key=lambda ff: rms_values[metric_name][ff]
+        )
+
+        for force_field in ordered_ffs:
             sorted_data = np.sort([*data[metric_name][force_field].values()])
+            display_name = ff_display.get(force_field, force_field)
             axis.plot(
                 sorted_data,
                 np.arange(1, len(sorted_data) + 1) / len(sorted_data),
                 "-",
-                label=force_field,
+                label=display_name,
+                color=color_map[force_field],
             )
 
         x_label = (
@@ -621,7 +662,7 @@ def plot_cdfs(output_metrics: Path, plot_dir: Path) -> None:
             else f"Jensen-Shannon Distance at {js_div_temp} K"
         )
         axis.set_xlabel(x_label)
-        axis.set_ylabel("CDF")
+        axis.set_ylabel("Cumulative Proportion")
         axis.set_xlim(x_ranges[metric_name])
         axis.set_ylim((-0.05, 1.05))
         axis.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
@@ -630,12 +671,19 @@ def plot_cdfs(output_metrics: Path, plot_dir: Path) -> None:
         pyplot.close(figure)
 
 
-def plot_rms_stats(output_metrics: Path, plot_dir: Path) -> None:
+def plot_rms_stats(
+    output_metrics: Path,
+    plot_dir: Path,
+    color_map: dict[str, str] | None = None,
+) -> None:
     """Plot RMS values for RMSD and RMSE."""
     metrics = MetricCollection.parse_file(output_metrics)
     force_fields = list(metrics.metrics.keys())
 
     units = METRIC_UNITS
+    color_map = (
+        color_map if color_map is not None else get_force_field_color_map(force_fields)
+    )
 
     rms_rmses = {
         force_field: _get_rms(
@@ -653,7 +701,11 @@ def plot_rms_stats(output_metrics: Path, plot_dir: Path) -> None:
 
     for metric_name, data in zip(["rmsd", "rmse"], [rms_rmsds, rms_rmses]):
         figure, axis = pyplot.subplots()
-        axis.bar(data.keys(), data.values(), color=pyplot.cm.tab10.colors)
+        axis.bar(
+            list(data.keys()),
+            list(data.values()),
+            color=[color_map[force_field] for force_field in data.keys()],
+        )
         axis.set_ylabel(metric_name.upper() + " / " + units[metric_name])
         pyplot.xticks(rotation=90)
 
@@ -666,10 +718,17 @@ def plot_rms_stats(output_metrics: Path, plot_dir: Path) -> None:
         pyplot.close(figure)
 
 
-def plot_rms_js_distance(output_metrics: Path, plot_dir: Path) -> None:
+def plot_rms_js_distance(
+    output_metrics: Path,
+    plot_dir: Path,
+    color_map: dict[str, str] | None = None,
+) -> None:
     """Plot RMS Jensen-Shannon distance for each force field."""
     metrics = MetricCollection.parse_file(output_metrics)
     force_fields = list(metrics.metrics.keys())
+    color_map = (
+        color_map if color_map is not None else get_force_field_color_map(force_fields)
+    )
 
     rms_js_distance = {
         force_field: _get_rms(
@@ -684,7 +743,9 @@ def plot_rms_js_distance(output_metrics: Path, plot_dir: Path) -> None:
 
     figure, axis = pyplot.subplots()
     axis.bar(
-        rms_js_distance.keys(), rms_js_distance.values(), color=pyplot.cm.tab10.colors
+        list(rms_js_distance.keys()),
+        list(rms_js_distance.values()),
+        color=[color_map[force_field] for force_field in rms_js_distance.keys()],
     )
     axis.set_ylabel(f"Mean Jensen-Shannon Distance at {js_div_temp} K")
     pyplot.xticks(rotation=90)
@@ -699,6 +760,7 @@ def plot_paired_stats(
     plot_dir: Path,
     ff_order: list[str] | None = None,
     ff_display_names: dict[str, str] | None = None,
+    color_map: dict[str, str] | None = None,
     show_significance: bool = True,
 ) -> None:
     """Plot paired per-molecule statistics for RMSD, RMSE, and JSD on a single figure.
@@ -732,6 +794,9 @@ def plot_paired_stats(
     all_ffs = list(metrics.metrics.keys())
     ff_display = (
         ff_display_names if ff_display_names is not None else FORCE_FIELD_DISPLAY_MAP
+    )
+    color_map = (
+        color_map if color_map is not None else get_force_field_color_map(all_ffs)
     )
 
     # Build per-metric arrays
@@ -811,11 +876,18 @@ def plot_paired_stats(
     pyplot.close(fig)
 
 
-def plot_mean_error_distribution(output_metrics: Path, plot_dir: Path) -> None:
+def plot_mean_error_distribution(
+    output_metrics: Path,
+    plot_dir: Path,
+    color_map: dict[str, str] | None = None,
+) -> None:
     import seaborn as sns
 
     metrics = MetricCollection.parse_file(output_metrics)
     force_fields = list(metrics.metrics.keys())
+    color_map = (
+        color_map if color_map is not None else get_force_field_color_map(force_fields)
+    )
 
     mean_errors = {
         force_field: np.array(
@@ -830,6 +902,7 @@ def plot_mean_error_distribution(output_metrics: Path, plot_dir: Path) -> None:
             data=mean_errors[force_field],
             label=force_field,
             ax=axis,
+            color=color_map[force_field],
         )
 
     axis.set_xlabel(r"Mean Error / kcal mol$^{-1}$")

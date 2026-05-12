@@ -79,7 +79,7 @@ aimnet = ">=0.1.0"
 nvalchemi-toolkit-ops = "==0.2.0"
 
 [tool.pixi.feature.presto-default.pypi-dependencies]
-presto = { git = "https://github.com/cole-group/presto.git", rev = "1aa5eb6c743fd6150dc127f943dce54471ead6ba" }
+presto = { git = "https://github.com/cole-group/presto.git", rev = "377a6383b5a28a586d5bd728a76eacc4cd1a40b5" }
 
 [tool.pixi.feature.presto-save-ff-trajectory.pypi-dependencies]
 presto = { git = "https://github.com/cole-group/presto.git", rev = "15d11cf9649df5a1497973cd413d2f354ba7e76c" }
@@ -99,9 +99,17 @@ torch-geometric = "*"
 garnetff = "*"
 igraph = "*"
 
+[tool.pixi.feature.orb.pypi-dependencies]
+orb-models = ">=0.5.5"
+# Pixi doesn't seem to detect the
+# Current annoyance is https://github.com/allenai/cached_path/issues/263 -- cached-path does
+# not allow new rich versions, though they should work fine. To get round this, install directly
+# from fork on GitHub which allows newer rich versions.
+cached-path = { git = "https://github.com/fjclark/cached_path.git", rev = "1cb8bdecd22e3af70182b8075bc86d7c18184c9e" }
+
 
 [tool.pixi.environments]
-default = {features = ["common", "standard", "garnet", "presto-default", "openeye"]}
+default = {features = ["common", "standard", "garnet", "presto-default", "openeye", "orb"]}
 default-save-ff-trajectory = {features = ["common", "standard", "garnet", "presto-save-ff-trajectory", "openeye"]}
 espaloma = {features = ["common", "espaloma", "presto-default", "openeye"]}
 no-openeye = {features = ["common", "standard", "garnet", "presto-default"]}
