@@ -74,6 +74,60 @@ CONFIG_DISPLAY_MAP: dict[str, str] = {
     "ablations": "Ablations",
 }
 
+# Stable, colour-blind friendly palette for force-field plots.
+# Keep this fixed so a given force field always maps to the same colour.
+FORCE_FIELD_COLOR_PALETTE: tuple[str, ...] = (
+    "#0072B2",
+    "#E69F00",
+    "#009E73",
+    "#D55E00",
+    "#CC79A7",
+    "#56B4E9",
+)
+
+# Explicit color overrides for force fields (raw keys or display names).
+# Fill this in to lock specific force fields to specific colours.
+FORCE_FIELD_COLOR_MAP: dict[str, str] = {
+    # Explicit mappings for key force fields.
+    "AceFF 2.0": "#0072B2",
+    "input_ff/aceff20.offxml": "#0072B2",
+    "presto": "#E69F00",
+    "benchmarking/tnet500/output/test/default/combined_force_field.offxml": "#E69F00",
+    "benchmarking/jacs_fragments/output/test/default/combined_force_field.offxml": "#E69F00",
+    "espaloma 0.4.0": "#009E73",
+    "input_ff/esp04.offxml": "#009E73",
+    "OpenFF 2.3.0": "#D55E00",
+    "openff-2.3.0": "#D55E00",
+    "OpenFF\nBespokeFit/\nB3LYP-D3BJ/DZVP": "#CC79A7",
+    "input_ff/bespokefit1_sage_jacs_frags.offxml": "#CC79A7",
+}
+
+
+def get_force_field_color_map(force_fields: list[str]) -> dict[str, str]:
+    """Return a stable force-field-to-colour mapping for plotting."""
+    ordered = sorted(force_fields)
+    palette = list(FORCE_FIELD_COLOR_PALETTE)
+    mapping: dict[str, str] = {}
+    used_colors: set[str] = set()
+
+    # Apply explicit overrides first, but avoid duplicates.
+    for force_field in ordered:
+        color = FORCE_FIELD_COLOR_MAP.get(force_field)
+        if color is not None and color not in used_colors:
+            mapping[force_field] = color
+            used_colors.add(color)
+
+    remaining_colors = [color for color in palette if color not in used_colors]
+    unassigned = [ff for ff in ordered if ff not in mapping]
+
+    for index, force_field in enumerate(unassigned):
+        if remaining_colors:
+            mapping[force_field] = remaining_colors.pop(0)
+        else:
+            mapping[force_field] = palette[index % len(palette)]
+
+    return mapping
+
 
 def get_dataset_display_name(dataset_name: str, dataset_type: str | None = None) -> str:
     """Return canonical dataset display name, optionally including split label."""

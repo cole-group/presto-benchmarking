@@ -9,6 +9,8 @@ from subprocess import run
 import loguru
 import networkx as nx
 import numpy as np
+import pandas as pd
+from rdkit import Chem
 from openbabel import openbabel as ob
 from openbabel import pybel
 from openff.toolkit import Molecule
@@ -252,4 +254,122 @@ def write_folmsbee_smiles_files(molecules_smi: Path, output_dir: Path) -> None:
         )
         for molecule_id, reason in failures:
             logger.warning(f"{molecule_id}: {reason}")
+
+
+def _compile_smarts(smarts_patterns: list[str]) -> list[tuple[str, Chem.Mol]]:
+    compiled: list[tuple[str, Chem.Mol]] = []
+    for smarts in smarts_patterns:
+        patt = Chem.MolFromSmarts(smarts)
+        if patt is None:
+            raise ValueError(f"Invalid SMARTS pattern: {smarts}")
+        compiled.append((smarts, patt))
+    return compiled
+
+
+def _smarts_matches(smiles: str, compiled_patterns: list[tuple[str, Chem.Mol]]) -> list[str]:
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        raise ValueError(f"Invalid SMILES: {smiles}")
+    return [smarts for smarts, patt in compiled_patterns if mol.HasSubstructMatch(patt)]
+
+
+def subset_folmsbee_smiles(
+    folmsbee_repo_dir: Path,
+    input_smiles_dir: Path,
+    output_dir: Path,
+    reference_method: str,
+    min_reference_energy_window: float,
+    max_molecules: int,
+    selection_strategy: str,
+    seed: int,
+    exclude_smarts: list[str] | None = None,
+) -> None:
+    """Filter Folmsbee molecules and write a subset of per-molecule .smi files."""
+    exclude_smarts = exclude_smarts or []
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    for existing in output_dir.glob("*.smi"):
+        existing.unlink()
+    selected_path = output_dir / "selected_molecules.txt"
+    if selected_path.exists():
+        selected_path.unlink()
+
+    reference_csv = folmsbee_repo_dir / "data-final.csv"
+    if not reference_csv.exists():
+        raise FileNotFoundError(f"Reference CSV not found: {reference_csv}")
+
+    reference_df = pd.read_csv(reference_csv)
+    required_columns = ["name", reference_method]
+    missing = [c for c in required_columns if c not in reference_df.columns]
+    if missing:
+        raise ValueError(f"Missing columns in {reference_csv}: {missing}")
+
+    candidate_smiles_files = sorted(input_smiles_dir.glob("*.smi"))
+    if not candidate_smiles_files:
+        raise ValueError(f"No .smi files found in {input_smiles_dir}")
+
+    smiles_by_id: dict[str, str] = {}
+    for smiles_file in candidate_smiles_files:
+        smiles = smiles_file.read_text().strip()
+        if not smiles:
+            raise ValueError(f"Empty SMILES file: {smiles_file}")
+        smiles_by_id[smiles_file.stem] = smiles
+
+    candidate_ids = set(smiles_by_id.keys())
+    ref_subset = reference_df[reference_df["name"].isin(candidate_ids)].copy()
+
+    window_df = (
+        ref_subset.dropna(subset=required_columns)
+        .groupby("name", as_index=False)[reference_method]
+        .agg(ref_min="min", ref_max="max")
+    )
+    window_df["reference_energy_window_kcal_mol"] = (
+        window_df["ref_max"] - window_df["ref_min"]
+    )
+
+    eligible_df = window_df[
+        window_df["reference_energy_window_kcal_mol"] >= min_reference_energy_window
+    ].copy()
+    eligible_ids = set(eligible_df["name"].tolist())
+
+    if exclude_smarts:
+        compiled_smarts = _compile_smarts(exclude_smarts)
+        smarts_excluded: set[str] = set()
+        for molecule_id in eligible_ids:
+            matches = _smarts_matches(smiles_by_id[molecule_id], compiled_smarts)
+            if matches:
+                smarts_excluded.add(molecule_id)
+        eligible_ids = eligible_ids - smarts_excluded
+
+    if not eligible_ids:
+        raise ValueError("No molecules remain after filtering")
+
+    selection_strategy = selection_strategy.lower()
+    if selection_strategy == "random":
+        rng = np.random.default_rng(seed)
+        eligible_sorted = sorted(eligible_ids)
+        n_keep = min(max_molecules, len(eligible_sorted))
+        selected = sorted(rng.choice(eligible_sorted, size=n_keep, replace=False).tolist())
+    elif selection_strategy == "top_window":
+        ranked = (
+            eligible_df[eligible_df["name"].isin(eligible_ids)]
+            .sort_values(
+                ["reference_energy_window_kcal_mol", "name"],
+                ascending=[False, True],
+            )
+        )
+        selected = ranked["name"].tolist()[: max_molecules]
+    elif selection_strategy == "name":
+        selected = sorted(eligible_ids)[: max_molecules]
+    else:
+        raise ValueError(
+            "selection_strategy must be one of: random, top_window, name"
+        )
+
+    for molecule_id in selected:
+        src_path = input_smiles_dir / f"{molecule_id}.smi"
+        output_path = output_dir / f"{molecule_id}.smi"
+        output_path.write_text(src_path.read_text())
+
+    (output_dir / "selected_molecules.txt").write_text("\n".join(selected) + "\n")
 

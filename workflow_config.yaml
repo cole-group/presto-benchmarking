@@ -104,6 +104,14 @@ folmsbee_analysis:
       extra_force_fields:
         - "input_ff/openff_unconstrained-2.3.0.offxml"
         - "input_ff/esp04.offxml"
+    orb_subset:
+      extra_force_fields:
+        - "input_ff/openff_unconstrained-2.3.0.offxml"
+        - "input_ff/esp04.offxml"
+      min_reference_energy_window: 3.0
+      subset_max_molecules: 100
+      subset_selection_strategy: "random"
+      subset_seed: 0
 
 # TYK2 reproducibility benchmark configuration
 tyk2_reproducibility:

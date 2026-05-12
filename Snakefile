@@ -46,7 +46,11 @@ def validation_force_fields(wildcards: Any) -> list[str]:
     dataset = wildcards.dataset
     checkpoint_kwargs: dict = {}
     if dataset == "folmsbee_conformers":
-        checkpoint_obj = checkpoints.process_folmsbee_smiles
+        if wildcards.dataset_type == "test":
+            checkpoint_obj = checkpoints.process_folmsbee_smiles
+        else:
+            checkpoint_obj = checkpoints.subset_folmsbee_smiles
+            checkpoint_kwargs = {"dataset_type": wildcards.dataset_type}
     else:
         checkpoint_obj = getattr(checkpoints, f"split_{dataset}_input", None)
         if checkpoint_obj is None:
@@ -67,7 +71,12 @@ def smiles_csv_input(wildcards: Any) -> str:
     """Resolve smiles.csv path for a dataset/split after the relevant checkpoint."""
     dataset = wildcards.dataset
 
-    if dataset != "folmsbee_conformers":
+    if dataset == "folmsbee_conformers":
+        if wildcards.dataset_type == "test":
+            checkpoints.process_folmsbee_smiles.get()
+        else:
+            checkpoints.subset_folmsbee_smiles.get(dataset_type=wildcards.dataset_type)
+    else:
         checkpoint_obj = getattr(checkpoints, f"split_{dataset}_input", None)
         checkpoint_kwargs: dict = {}
         if checkpoint_obj is None:
@@ -645,6 +654,38 @@ checkpoint process_folmsbee_smiles:
         "{input.gh_repo}/SMILES/molecules.smi {output}"
 
 
+checkpoint subset_folmsbee_smiles:
+    input:
+        gh_repo=rules.get_folmsbee_conformer_input.output[0],
+        smiles_dir=rules.process_folmsbee_smiles.output[0],
+    output:
+        directory("benchmarking/folmsbee_conformers/input/{dataset_type}/smiles")
+    params:
+        reference_method=lambda wc: config["folmsbee_analysis"]["reference_method"],
+        min_reference_energy_window=lambda wc: folmsbee_target_config(wc).get(
+            "min_reference_energy_window",
+            config["folmsbee_analysis"].get("min_reference_energy_window", 0.0),
+        ),
+        max_molecules=lambda wc: folmsbee_target_config(wc).get("subset_max_molecules", 100),
+        selection_strategy=lambda wc: folmsbee_target_config(wc).get(
+            "subset_selection_strategy", "random"
+        ),
+        seed=lambda wc: folmsbee_target_config(wc).get("subset_seed", config["random_seed"]),
+        exclude_smarts_opts=lambda wc: " ".join(
+            f"--exclude-smarts '{smarts}'"
+            for smarts in config["folmsbee_analysis"].get("exclude_smarts", [])
+        ),
+    shell:
+        "pixi run -e default presto-benchmark subset-folmsbee-smiles "
+        "{input.gh_repo} {input.smiles_dir} {output} "
+        "--reference-method '{params.reference_method}' "
+        "--min-reference-energy-window {params.min_reference_energy_window} "
+        "--max-molecules {params.max_molecules} "
+        "--selection-strategy {params.selection_strategy} "
+        "--seed {params.seed} "
+        "{params.exclude_smarts_opts}"
+
+
 rule create_folmsbee_smiles_csv:
     input:
         smiles_dir=rules.process_folmsbee_smiles.output[0]
@@ -714,8 +755,9 @@ rule analyse_folmsbee_conformers:
         min_conformers_per_molecule=lambda wc: config["folmsbee_analysis"].get(
             "min_conformers_per_molecule", 5
         ),
-        min_reference_energy_window=lambda wc: config["folmsbee_analysis"].get(
-            "min_reference_energy_window", 0.0
+        min_reference_energy_window=lambda wc: folmsbee_target_config(wc).get(
+            "min_reference_energy_window",
+            config["folmsbee_analysis"].get("min_reference_energy_window", 0.0),
         ),
         n_processes_opt=lambda wc: (
             f"--n-processes {config['folmsbee_analysis']['n_processes']}"

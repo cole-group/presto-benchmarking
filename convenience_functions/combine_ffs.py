@@ -105,9 +105,10 @@ def combine_force_fields(
                     logger.error(
                         f"New parameter {parameter} is not identical to existing parameter with the same SMIRKS: {current_new_params}"
                     )
-                    raise ValueError(
-                        f"New parameter ID {parameter.id} {parameter} already exists in the combined force field."
-                    )
+                    # raise ValueError(
+                    #     f"New parameter ID {parameter.id} {parameter} already exists in the combined force field."
+                    # )
+                    continue
 
                 combined_handler.add_parameter(parameter.to_dict())
 

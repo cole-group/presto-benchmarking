@@ -127,6 +127,67 @@ def process_folmsbee_smiles_cli(
     )
 
 
+@app.command("subset-folmsbee-smiles")
+def subset_folmsbee_smiles_cli(
+    folmsbee_repo_dir: Path = typer.Argument(
+        ..., help="Path to Folmsbee conformer-benchmark repository clone"
+    ),
+    input_smiles_dir: Path = typer.Argument(
+        ..., help="Directory containing per-molecule .smi files to filter"
+    ),
+    output_dir: Path = typer.Argument(
+        ..., help="Directory to write filtered per-molecule .smi files"
+    ),
+    reference_method: str = typer.Option(
+        "dlpno", help="Reference method column from data-final.csv"
+    ),
+    min_reference_energy_window: float = typer.Option(
+        3.0,
+        "--min-reference-energy-window",
+        min=0.0,
+        help=(
+            "Exclude molecules whose reference-energy window (max-min in kcal/mol) "
+            "is below this threshold"
+        ),
+    ),
+    max_molecules: int = typer.Option(
+        100,
+        "--max-molecules",
+        min=1,
+        help="Maximum number of molecules to keep",
+    ),
+    selection_strategy: Literal["random", "top_window", "name"] = typer.Option(
+        "random",
+        "--selection-strategy",
+        help="Selection strategy for eligible molecules",
+    ),
+    seed: int = typer.Option(
+        0,
+        "--seed",
+        help="Random seed for selection when using random strategy",
+    ),
+    exclude_smarts: list[str] = typer.Option(
+        [],
+        "--exclude-smarts",
+        help="SMARTS pattern to exclude molecules before selection (repeatable)",
+    ),
+) -> None:
+    """Subset Folmsbee molecules after SMARTS and reference-window filtering."""
+    from convenience_functions.get_folmsbee_input import subset_folmsbee_smiles
+
+    subset_folmsbee_smiles(
+        folmsbee_repo_dir=folmsbee_repo_dir,
+        input_smiles_dir=input_smiles_dir,
+        output_dir=output_dir,
+        reference_method=reference_method,
+        min_reference_energy_window=min_reference_energy_window,
+        max_molecules=max_molecules,
+        selection_strategy=selection_strategy,
+        seed=seed,
+        exclude_smarts=exclude_smarts,
+    )
+
+
 @app.command("analyse-folmsbee")
 def analyse_folmsbee_cli(
     folmsbee_repo_dir: Path = typer.Argument(
