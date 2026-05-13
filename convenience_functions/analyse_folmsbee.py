@@ -143,7 +143,7 @@ def _component_id(component_name: str) -> str:
 def _overall_force_field_label(method_name: str) -> str:
     lower = method_name.lower()
     if method_name.endswith("/combined_force_field.offxml"):
-        return "bespoke"
+        return f"bespoke-{Path(method_name).parent.name}"
     if "esp" in lower:
         return "espaloma"
     if "bespokefit" in lower:
@@ -179,6 +179,14 @@ def _method_key(method_name: str) -> str | None:
 
 
 def _method_display_name(method_name: str) -> str:
+    if method_name.endswith("/combined_force_field.offxml"):
+        config_name = Path(method_name).parent.name
+        config_key = config_name.lower()
+        config_display = _METHOD_DISPLAY_NAMES.get(
+            config_key,
+            config_name.replace("_", " ").title(),
+        )
+        return f"presto: {config_display}"
     key = _method_key(method_name)
     if key is None:
         return _method_label(method_name)
@@ -1352,8 +1360,12 @@ def _plot_violin_with_significance(
 ) -> None:
     metric_column = "rmse"
     plot_df = ff_metric_df.dropna(subset=[metric_column]).copy()
-    plot_df["force_field_display"] = plot_df["force_field"].map(_METHOD_DISPLAY_NAMES)
-    order = [_METHOD_DISPLAY_NAMES[m] for m in method_order if m in plot_df["force_field"].unique()]
+    if "force_field_col" in plot_df.columns:
+        plot_df["force_field_display"] = plot_df["force_field_col"].map(_method_display_name)
+        order = list(pd.unique(plot_df["force_field_display"]))
+    else:
+        plot_df["force_field_display"] = plot_df["force_field"].map(_METHOD_DISPLAY_NAMES)
+        order = [_METHOD_DISPLAY_NAMES[m] for m in method_order if m in plot_df["force_field"].unique()]
     fig, ax = plt.subplots(figsize=(10, 6))
     sns.violinplot(data=plot_df, x="force_field_display", y=metric_column, order=order, ax=ax, palette="Set2")
     sns.swarmplot(
@@ -1367,12 +1379,31 @@ def _plot_violin_with_significance(
         ax=ax,
     )
 
-    candidate_pairs = [
-        ("presto", "espaloma"),
-        ("presto", "openff23"),
-        ("presto", "aimnet2"),
-    ]
-    pivot = plot_df.pivot(index="molecule", columns="force_field", values=metric_column)
+    if "force_field_col" in plot_df.columns:
+        presto_labels = [name for name in order if name.lower().startswith("presto:")]
+        preferred_non_presto = [
+            _METHOD_DISPLAY_NAMES["espaloma"],
+            _METHOD_DISPLAY_NAMES["openff23"],
+            _METHOD_DISPLAY_NAMES["aimnet2"],
+        ]
+        non_presto_labels = [name for name in preferred_non_presto if name in order]
+        candidate_pairs = [
+            (presto_label, other)
+            for presto_label in presto_labels
+            for other in non_presto_labels
+        ]
+        pivot = plot_df.pivot(
+            index="molecule",
+            columns="force_field_display",
+            values=metric_column,
+        )
+    else:
+        candidate_pairs = [
+            ("presto", "espaloma"),
+            ("presto", "openff23"),
+            ("presto", "aimnet2"),
+        ]
+        pivot = plot_df.pivot(index="molecule", columns="force_field", values=metric_column)
     valid_pairs: list[tuple[str, str]] = []
     p_values: list[float] = []
     for left, right in candidate_pairs:
@@ -1383,7 +1414,10 @@ def _plot_violin_with_significance(
             continue
         n = len(pair_df)
         n_pos = int(np.sum(pair_df[left].to_numpy() < pair_df[right].to_numpy()))
-        valid_pairs.append((_METHOD_DISPLAY_NAMES[left], _METHOD_DISPLAY_NAMES[right]))
+        if "force_field_col" in plot_df.columns:
+            valid_pairs.append((left, right))
+        else:
+            valid_pairs.append((_METHOD_DISPLAY_NAMES[left], _METHOD_DISPLAY_NAMES[right]))
         p_values.append(float(binomtest(n_pos, n, 0.5).pvalue))
 
     if valid_pairs:
