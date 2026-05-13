@@ -193,6 +193,23 @@ def _method_display_name(method_name: str) -> str:
     return _METHOD_DISPLAY_NAMES[key]
 
 
+def _build_method_color_map(method_names: Iterable[str]) -> dict[str, tuple[float, float, float]]:
+    """Stable display_name -> RGB mapping shared across plots.
+
+    Uses Set2 (matches the violin plot's historical palette) when there are
+    <= 8 distinct methods, falling back to tab20 when more colours are needed.
+    """
+    display_names: list[str] = []
+    for method_name in method_names:
+        display = _method_display_name(method_name)
+        if display not in display_names:
+            display_names.append(display)
+    n = max(len(display_names), 1)
+    palette_name = "Set2" if n <= 8 else "tab20"
+    palette = sns.color_palette(palette_name, n_colors=max(n, 8))
+    return {name: tuple(palette[i]) for i, name in enumerate(display_names)}
+
+
 def _find_method_column(method_names: Iterable[str], method_key: str) -> str | None:
     for method_name in method_names:
         if _method_key(method_name) == method_key:
@@ -980,6 +997,7 @@ def _plot_correlation(
     method_names: list[str],
     reference_method: str,
     output_path: Path,
+    color_map: dict[str, tuple[float, float, float]] | None = None,
 ) -> None:
     if output_path.exists():
         logger.info(f"Skipping existing output: {output_path}")
@@ -1005,12 +1023,16 @@ def _plot_correlation(
             filtered[reference_method].to_numpy(float),
             filtered[method_name].to_numpy(float),
         )
+        display_name = _method_display_name(method_name)
         label = (
-            f"{_method_label(method_name)} "
+            f"{display_name} "
             f"(R²={st['r2']:.2f}, τ={st['kendall_tau']:.2f}, "
             f"RMSE={st['rmse']:.2f}, MAE={st['mae']:.2f})"
         )
-        scatter = ax.scatter(ref_rel, met_rel, label=label)
+        scatter_kwargs: dict = {"label": label}
+        if color_map is not None and display_name in color_map:
+            scatter_kwargs["color"] = color_map[display_name]
+        scatter = ax.scatter(ref_rel, met_rel, **scatter_kwargs)
 
         if method_name.endswith("/combined_force_field.offxml") and "geom" in filtered:
             colour = scatter.get_facecolor()[0]
@@ -1357,6 +1379,7 @@ def _plot_violin_with_significance(
     ff_metric_df: pd.DataFrame,
     output_path: Path,
     method_order: list[str],
+    color_map: dict[str, tuple[float, float, float]] | None = None,
 ) -> None:
     metric_column = "rmse"
     plot_df = ff_metric_df.dropna(subset=[metric_column]).copy()
@@ -1366,8 +1389,15 @@ def _plot_violin_with_significance(
     else:
         plot_df["force_field_display"] = plot_df["force_field"].map(_METHOD_DISPLAY_NAMES)
         order = [_METHOD_DISPLAY_NAMES[m] for m in method_order if m in plot_df["force_field"].unique()]
+    palette: dict | str
+    if color_map is not None:
+        palette = {name: color_map[name] for name in order if name in color_map}
+        if len(palette) < len(order):
+            palette = "Set2"
+    else:
+        palette = "Set2"
     fig, ax = plt.subplots(figsize=(10, 6))
-    sns.violinplot(data=plot_df, x="force_field_display", y=metric_column, order=order, ax=ax, palette="Set2")
+    sns.violinplot(data=plot_df, x="force_field_display", y=metric_column, order=order, ax=ax, palette=palette)
     sns.swarmplot(
         data=plot_df,
         x="force_field_display",
@@ -1908,6 +1938,7 @@ def analyse_folmsbee(
 
     # ---- Per-molecule stats and plots ------------------------------------
     method_names = [*precomputed_methods, *force_field_paths, *mlp_names]
+    method_color_map = _build_method_color_map(method_names)
     per_molecule_stats: list[dict] = []
     included_results_df = reference_df[reference_df["name"].isin(molecule_names_to_include)].copy()
 
@@ -1974,6 +2005,7 @@ def analyse_folmsbee(
                 method_names=method_names,
                 reference_method=reference_method,
                 output_path=per_mol_dir / "correlation.png",
+                color_map=method_color_map,
             )
 
         _plot_relative_component_energies(
@@ -2073,6 +2105,7 @@ def analyse_folmsbee(
         ff_metric_df=ff_metric_df,
         output_path=plot_dir / "overall_rmse_violin_with_significance.png",
         method_order=detailed_method_order,
+        color_map=method_color_map,
     )
 
     paired_df, paired_counts, paired_overlap_n = _paired_metric_dataframe(
