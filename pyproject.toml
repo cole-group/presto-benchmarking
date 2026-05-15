@@ -2,7 +2,7 @@
 name = "presto-benchmark"
 version = "0.1.0"
 description = "Presto benchmarking workflow"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 
 [project.scripts]
 presto-benchmark = "convenience_functions._cli:app"
@@ -15,7 +15,7 @@ platforms = ["linux-64"]
 cuda = "12"
 
 [tool.pixi.feature.common.dependencies]
-python = ">=3.12"
+python = ">=3.11"
 pip = "*"
 openff-toolkit = ">=0.18.0"
 openff-units = "*"
@@ -42,6 +42,7 @@ qcelemental = "*"
 nglview = "*"
 jupyter = "*"
 qcfractal = ">=0.63"
+cmcrameri = ">=1.9,<2"
 
 
 [tool.pixi.feature.common.pypi-dependencies]
@@ -50,19 +51,29 @@ presto-benchmark = { path = ".", editable = true }
 [tool.pixi.feature.standard.dependencies]
 pyyaml = "*"
 datasets = "*"
-openmm = ">=8.5.0"
 tensorboardX = "*"
 tensorboard = "*"
 versioneer = "*"
-pytorch-gpu = "==2.8.0"
 pydantic = ">=2"
 pydantic-settings = "*"
 pydantic-units = "*"
-cuda-version = ">=12"
-openmm-ml = ">=1.6"
 # openmm-torch = ">=1.5.1"
-torchmd-net = ">=3.0.3"
 cuda-cudart-dev = ">=12,<13"
+
+[tool.pixi.feature.openmm-current.dependencies]
+pytorch-gpu = "==2.8.0"
+cuda-version = ">=12"
+openmm = ">=8.5.0"
+openmm-ml = ">=1.6"
+torchmd-net = ">=3.0.3"
+
+[tool.pixi.feature.openmm-84.dependencies]
+cuda-version = "==12.6"
+pytorch-gpu = "==2.7.1"
+openmm = "<8.5"
+openmm-ml = ">=1.5"
+openmm-torch = ">=1.5.1"
+torchmd-net = "*"
 
 [tool.pixi.feature.standard.pypi-dependencies]
 mace-torch = "==0.3.15"
@@ -74,15 +85,20 @@ yammbs = { git = "https://github.com/fjclark/yammbs", rev = "ebe7e5eb61d9ea73e0f
 smirnoff-plugins = { git = "https://github.com/fjclark/smirnoff-plugins", rev = "fd4e8e71a0a2c710d662f6001cabc802a5097cf6" }
 deepchem = { version = ">=2.7.0", extras = ["jax"] } # Interferes with pytorch if ["torch"]
 # AIMNet Stuff
-aimnet = ">=0.1.0"
-# aimnet doesn't like more recent versions
-nvalchemi-toolkit-ops = "==0.2.0"
 
 [tool.pixi.feature.presto-default.pypi-dependencies]
 presto = { git = "https://github.com/cole-group/presto.git", rev = "377a6383b5a28a586d5bd728a76eacc4cd1a40b5" }
 
+[tool.pixi.feature.openmm-current.pypi-dependencies]
+aimnet = ">=0.1.0"
+# aimnet doesn't like more recent versions
+nvalchemi-toolkit-ops = "==0.2.0"
+
 [tool.pixi.feature.presto-save-ff-trajectory.pypi-dependencies]
 presto = { git = "https://github.com/cole-group/presto.git", rev = "15d11cf9649df5a1497973cd413d2f354ba7e76c" }
+
+[tool.pixi.feature.presto-051.pypi-dependencies]
+presto = { git = "https://github.com/cole-group/presto.git", tag = "0.5.1" }
 
 [tool.pixi.feature.openeye.dependencies]
 openeye-toolkits = ">=2025.2.1,<2026"
@@ -109,10 +125,11 @@ cached-path = { git = "https://github.com/fjclark/cached_path.git", rev = "1cb8b
 
 
 [tool.pixi.environments]
-default = {features = ["common", "standard", "garnet", "presto-default", "openeye", "orb"]}
-default-save-ff-trajectory = {features = ["common", "standard", "garnet", "presto-save-ff-trajectory", "openeye"]}
+default = {features = ["common", "standard", "openmm-current", "garnet", "presto-default", "openeye", "orb"]}
+default-save-ff-trajectory = {features = ["common", "standard", "openmm-current", "garnet", "presto-save-ff-trajectory", "openeye"]}
 espaloma = {features = ["common", "espaloma", "presto-default", "openeye"]}
-no-openeye = {features = ["common", "standard", "garnet", "presto-default"]}
+no-openeye = {features = ["common", "standard", "openmm-current", "garnet", "presto-default"]}
+presto051 = {features = ["common", "standard", "openmm-84", "presto-051", "openeye"]}
 
 [tool.setuptools.package-dir]
 "presto_benchmark" = "convenience_functions"
@@ -130,6 +147,3 @@ pre-commit = { cmd = "pre-commit run --all-files" }
 lint = { cmd = "ruff check convenience_functions" }
 format = { cmd = "ruff format convenience_functions && ruff check --fix --select I convenience_functions" }
 type-check = { cmd = "mypy --follow-imports=silent --ignore-missing-imports --strict convenience_functions" }
-
-[tool.pixi.dependencies]
-cmcrameri = ">=1.9,<2"

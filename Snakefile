@@ -239,6 +239,8 @@ rule run_presto:
         config_file="configs/{config_name}.yaml",
     output:
         "benchmarking/{dataset}/output/{dataset_type}/{config_name}/{molecule}/bespoke_force_field.offxml",
+    params:
+        pixi_environment=lambda wc: "presto051" if wc.dataset in ("tnet500", "jacs_fragments") else "default",
     threads: 32 # So that only one job at once runs on my workstation...
     resources:
         mem_mb=8000,
@@ -246,7 +248,7 @@ rule run_presto:
         slurm_partition="gpu-s_free",
         slurm_extra="--gpus-per-task=1",
     shell:
-        "pixi run -e default presto-benchmark run-presto {input.config_file} {input.smiles_file} $(dirname {output[0]})"
+        "pixi run -e {params.pixi_environment} presto-benchmark run-presto {input.config_file} {input.smiles_file} $(dirname {output[0]})"
 
 checkpoint split_test_only_input:
     """Generic split for datasets where everything goes into the test set (frac-test 1.0)."""
