@@ -69,7 +69,7 @@ _METHOD_DISPLAY_NAMES = {
     "wb97": r"$\omega$ B97",
 }
 
-_SUMMARY_METHOD_ORDER = ["aimnet2", "presto", "espaloma", "openff23", "ani2x", "mp2", "wb97"]
+_SUMMARY_METHOD_ORDER = ["wb97", "mp2", "ani2x", "aimnet2", "presto", "espaloma", "openff23"]
 
 
 # ---------------------------------------------------------------------------
@@ -1385,7 +1385,12 @@ def _plot_violin_with_significance(
     plot_df = ff_metric_df.dropna(subset=[metric_column]).copy()
     if "force_field_col" in plot_df.columns:
         plot_df["force_field_display"] = plot_df["force_field_col"].map(_method_display_name)
-        order = list(pd.unique(plot_df["force_field_display"]))
+        _display_priority = {_METHOD_DISPLAY_NAMES[k]: i for i, k in enumerate(_SUMMARY_METHOD_ORDER)}
+        def _violin_sort_key(name: str) -> tuple[int, str]:
+            if name.lower().startswith("presto:"):
+                return (_display_priority.get("presto", 4), name)
+            return (_display_priority.get(name, len(_SUMMARY_METHOD_ORDER)), name)
+        order = sorted(pd.unique(plot_df["force_field_display"]), key=_violin_sort_key)
     else:
         plot_df["force_field_display"] = plot_df["force_field"].map(_METHOD_DISPLAY_NAMES)
         order = [_METHOD_DISPLAY_NAMES[m] for m in method_order if m in plot_df["force_field"].unique()]
@@ -1405,7 +1410,7 @@ def _plot_violin_with_significance(
         order=order,
         color="k",
         alpha=0.45,
-        size=1.75,
+        size=1.6,
         ax=ax,
     )
 
