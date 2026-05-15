@@ -578,11 +578,11 @@ rule aggregate_smiles_descriptors:
 rule aggregate_validation_fit_errors:
     input:
         tnet500_test="benchmarking/tnet500/analysis/test/default/plots/presto_fit_validation_energy_rmse_summary.csv",
-        # jacs_test="benchmarking/jacs_fragments/analysis/test/default/plots/presto_fit_validation_energy_rmse_summary.csv",
+        jacs_test="benchmarking/jacs_fragments/analysis/test/default/plots/presto_fit_validation_energy_rmse_summary.csv",
         folmsbee_test="benchmarking/folmsbee_conformers/analysis/test/aimnet2/plots/presto_fit_validation_energy_rmse_summary.csv",
         summary_csvs=[
             "benchmarking/tnet500/analysis/test/default/plots/presto_fit_validation_energy_rmse_summary.csv",
-            # "benchmarking/jacs_fragments/analysis/test/default/plots/presto_fit_validation_energy_rmse_summary.csv",
+            "benchmarking/jacs_fragments/analysis/test/default/plots/presto_fit_validation_energy_rmse_summary.csv",
             "benchmarking/folmsbee_conformers/analysis/test/aimnet2/plots/presto_fit_validation_energy_rmse_summary.csv",
         ],
     output:
