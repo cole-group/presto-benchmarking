@@ -23,12 +23,12 @@ from convenience_functions._stats import (
 
 matplotlib.use("Agg")
 
-HEATMAP_METRICS = ["RMSD", "RMSE", "RMS $\sqrt{JSD}$ (500 K)"]
+HEATMAP_METRICS = ["RMSD", "RMSE", "$\sqrt{JSD}$ (500 K)"]
 
 # Keys excluded from colorbar scaling (still displayed; large values saturate the scale)
 COLORBAR_EXCL = {"openff-2.3.0"}
 
-_METRIC_COLUMN = {"RMSD": "rmsd", "RMSE": "rmse", "RMS $\sqrt{JSD}$ (500 K)": "js_distance"}
+_METRIC_COLUMN = {"RMSD": "rmsd", "RMSE": "rmse", "$\sqrt{JSD}$ (500 K)": "js_distance"}
 _REFERENCE_LABEL = "default"
 
 
