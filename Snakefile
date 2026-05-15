@@ -143,6 +143,20 @@ def yammbs_target_config(wildcards: Any) -> dict[str, Any]:
     return config["yammbs_analysis"]["targets"][wildcards.dataset][wildcards.dataset_type]
 
 
+def build_torsion_plot_opts(target_config: dict[str, Any]) -> str:
+    """Build --plot-torsion-id CLI flags from a yammbs target config section."""
+    torsion_plot_ids: dict = target_config.get("torsion_plot_ids", {})
+    base_ffs: list[str] = target_config.get("torsion_plot_base_force_fields", [])
+    parts = []
+    for tid, extra_ffs in torsion_plot_ids.items():
+        all_ffs = base_ffs + (extra_ffs or [])
+        if all_ffs:
+            parts.append(f"--plot-torsion-id {tid}:{','.join(all_ffs)}")
+        else:
+            parts.append(f"--plot-torsion-id {tid}")
+    return " ".join(parts)
+
+
 def folmsbee_target_config(wildcards: Any) -> dict[str, Any]:
     """Return Folmsbee analysis config for a dataset split."""
     return config["folmsbee_analysis"]["targets"][wildcards.dataset_type]
@@ -622,10 +636,7 @@ rule analyse_torsion_scans_yammbs:
             f"--extra-force-field '{ff}'"
             for ff in yammbs_target_config(wc)["extra_force_fields"]
         ),
-        torsion_plot_id_opts=lambda wc: " ".join(
-            f"--plot-torsion-id {torsion_id}"
-            for torsion_id in yammbs_target_config(wc).get("torsion_plot_ids", [])
-        ),
+        torsion_plot_id_opts=lambda wc: build_torsion_plot_opts(yammbs_target_config(wc)),
     shell:
         "pixi run -e default presto-benchmark analyse-torsion-scans "
         "{input.qca_data_json} {input.combined_ff} {params.analysis_dir} "
@@ -853,11 +864,8 @@ rule analyse_tnet500_validation_ablations:
             f"--base-force-field '{ff}'"
             for ff in config["yammbs_analysis"]["base_force_fields"]
         ),
-        torsion_plot_id_opts=" ".join(
-            f"--plot-torsion-id {torsion_id}"
-            for torsion_id in config["yammbs_analysis"]["targets"]["tnet500"][
-                "validation"
-            ].get("torsion_plot_ids", [])
+        torsion_plot_id_opts=build_torsion_plot_opts(
+            config["yammbs_analysis"]["targets"]["tnet500"]["validation"]
         ),
     shell:
         "pixi run -e default presto-benchmark analyse-torsion-scans "
@@ -934,11 +942,8 @@ rule analyse_tnet500_reopt_v4_validation_ablations:
             f"--base-force-field '{ff}'"
             for ff in config["yammbs_analysis"]["base_force_fields"]
         ),
-        torsion_plot_id_opts=" ".join(
-            f"--plot-torsion-id {torsion_id}"
-            for torsion_id in config["yammbs_analysis"]["targets"]["tnet500"][
-                "validation"
-            ].get("torsion_plot_ids", [])
+        torsion_plot_id_opts=build_torsion_plot_opts(
+            config["yammbs_analysis"]["targets"]["tnet500"]["validation"]
         ),
     shell:
         "pixi run -e default presto-benchmark analyse-torsion-scans "
@@ -1011,11 +1016,8 @@ rule analyse_jacs_fragments_full_mol_fits_per_force_field:
                 "extra_force_fields"
             ]
         ),
-        torsion_plot_id_opts=lambda wc: " ".join(
-            f"--plot-torsion-id {torsion_id}"
-            for torsion_id in config["yammbs_analysis"]["targets"]["jacs_fragments_full_mol_fits"][
-                "test"
-            ].get("torsion_plot_ids", [])
+        torsion_plot_id_opts=build_torsion_plot_opts(
+            config["yammbs_analysis"]["targets"]["jacs_fragments_full_mol_fits"]["test"]
         ),
     shell:
         "pixi run -e no-openeye presto-benchmark analyse-torsion-scans "

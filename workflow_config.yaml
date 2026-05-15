@@ -58,11 +58,19 @@ yammbs_analysis:
       validation:
         # For validation, all ablation variants are included in analyse_tnet500_validation_ablations rule
         extra_force_fields: []
+        # Force fields included on every torsion scan plot (by short key / label)
+        torsion_plot_base_force_fields:
+          - "default"
+          - "openff-2.3.0"
+        # Per-torsion extra force fields to add on top of the base set
         torsion_plot_ids:
-          - 412
-          - 140
-          - 477
-          - 493
+          140:
+            - "no_metad"
+          412:
+            - "no_min"
+          477:
+            - "one_it"
+          493: []
     jacs_fragments:
       test:
         extra_force_fields:
@@ -94,10 +102,10 @@ folmsbee_analysis:
     - "mp2"
     - "wb97"
     - "ani2"
-  mlp_names: ["aimnet2", "aceff-2.0"]
+  mlp_names: ["aimnet2"]
   single_point_mlp: true
   torsion_restraint_force_constant: 100000
-  mm_minimization_steps: 0
+  mm_minimization_steps: -1
   n_processes: null
   targets:
     test:
@@ -108,6 +116,7 @@ folmsbee_analysis:
       extra_force_fields:
         - "input_ff/openff_unconstrained-2.3.0.offxml"
         - "input_ff/esp04.offxml"
+        - "benchmarking/folmsbee_conformers/output/test/aimnet2/combined_force_field.offxml"
       min_reference_energy_window: 3.0
       subset_max_molecules: 100
       subset_selection_strategy: "random"

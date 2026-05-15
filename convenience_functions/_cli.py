@@ -511,16 +511,27 @@ def analyse_torsion_scans_cli(
         None,
         help="Number of parallel processes",
     ),
-    plot_torsion_ids: list[int] = typer.Option(
+    plot_torsion_ids: list[str] = typer.Option(
         [],
         "--plot-torsion-id",
-        help="Torsion IDs to generate detailed scan plots for",
+        help=(
+            "Torsion ID to plot, optionally with a colon-separated list of force "
+            "field short keys to include: 'ID' (all FFs) or 'ID:ff1,ff2,...'"
+        ),
     ),
 ) -> None:
     """Run yammbs torsion scan analysis and generate metrics/plots."""
     from convenience_functions.yammbs_torsion_analysis import analyse_torsion_scans
 
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    torsion_ff_map: dict[int, list[str]] = {}
+    for spec in plot_torsion_ids:
+        if ":" in spec:
+            id_str, ffs_str = spec.split(":", 1)
+            torsion_ff_map[int(id_str)] = [f for f in ffs_str.split(",") if f]
+        else:
+            torsion_ff_map[int(spec)] = []
 
     analyse_torsion_scans(
         qcarchive_torsion_data=qcarchive_torsion_data,
@@ -532,7 +543,7 @@ def analyse_torsion_scans_cli(
         extra_force_fields=[*extra_force_fields, str(combined_force_field)],
         method=method,
         n_processes=n_processes,
-        torsion_plot_ids=plot_torsion_ids,
+        torsion_ff_map=torsion_ff_map or None,
     )
 
 

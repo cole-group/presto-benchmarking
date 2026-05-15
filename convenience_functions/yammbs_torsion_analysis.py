@@ -31,6 +31,19 @@ from yammbs.torsion.outputs import MetricCollection
 
 pyplot.style.use("ggplot")
 
+
+def _ff_key_from_raw_name(raw_name: str) -> str:
+    """Return the short key for a force field path or label.
+
+    Paths ending in ``/combined_force_field.offxml`` resolve to their parent
+    directory name (e.g. ``…/validation/no_metad/combined_force_field.offxml``
+    → ``no_metad``).  All other strings are returned unchanged.
+    """
+    if raw_name.endswith("/combined_force_field.offxml"):
+        return Path(raw_name).parent.name
+    return raw_name
+
+
 PAIRED_METRIC_CONFIGS = [
     {"key": "rmsd", "label": METRIC_LABELS["rmsd"], "units": METRIC_UNITS["rmsd"]},
     {"key": "rmse", "label": METRIC_LABELS["rmse"], "units": METRIC_UNITS["rmse"]},
@@ -54,7 +67,7 @@ def analyse_torsion_scans(
         "openmm_torsion_atoms_frozen", "openmm_torsion_restrained"
     ] = "openmm_torsion_restrained",
     n_processes: int | None = None,
-    torsion_plot_ids: list[int] | None = None,
+    torsion_ff_map: dict[int, list[str]] | None = None,
 ) -> None:
     """Run yammbs torsion analysis across selected force fields."""
     force_fields = base_force_fields + extra_force_fields
@@ -115,7 +128,7 @@ def analyse_torsion_scans(
     plot_requested_torsion_scans(
         store=store,
         force_fields=force_fields,
-        torsion_plot_ids=torsion_plot_ids or [],
+        torsion_ff_map=torsion_ff_map or {},
         output_dir=plot_dir / "torsion_id_scans",
         color_map=color_map,
     )
@@ -446,31 +459,37 @@ def _get_torsion_highlight_image(store: TorsionStore, torsion_id: int) -> np.nda
 def plot_requested_torsion_scans(
     store: TorsionStore,
     force_fields: list[str],
-    torsion_plot_ids: list[int],
+    torsion_ff_map: dict[int, list[str]],
     output_dir: Path,
     color_map: dict[str, str] | None = None,
 ) -> None:
-    """Plot scan profiles for requested torsion IDs with molecule highlights and RMSEs."""
-    if len(torsion_plot_ids) == 0:
+    """Plot scan profiles for requested torsion IDs with molecule highlights and RMSEs.
+
+    ``torsion_ff_map`` maps each torsion ID to the force field short keys (or
+    raw labels) to include on that plot.  The colour map is always computed from
+    the full ``force_fields`` list so colours are consistent across plots.
+    """
+    if not torsion_ff_map:
         return
 
     from openff.toolkit import Molecule
-
-    requested_ids = list(dict.fromkeys(torsion_plot_ids))
 
     output_dir.mkdir(parents=True, exist_ok=True)
     color_map = (
         color_map if color_map is not None else get_force_field_color_map(force_fields)
     )
     markers = ["o", "^", "s", "D", "v", "P", "X", "<", ">", "*"]
-    line_styles = ["-", "--", "-.", ":"]
 
-    def _ff_key_from_raw_name(raw_name: str) -> str:
-        if raw_name.endswith("/combined_force_field.offxml"):
-            return Path(raw_name).parent.name
-        return raw_name
-
-    for torsion_id in requested_ids:
+    for torsion_id in dict.fromkeys(torsion_ff_map):  # preserve insertion order, dedupe
+        ff_keys = torsion_ff_map[torsion_id]
+        if ff_keys:
+            key_set = set(ff_keys)
+            torsion_force_fields = [
+                ff for ff in force_fields
+                if ff in key_set or _ff_key_from_raw_name(ff) in key_set
+            ]
+        else:
+            torsion_force_fields = force_fields
         qm_energies = dict(sorted(store.get_qm_energies_by_torsion_id(torsion_id).items()))
         qm_points = store.get_qm_points_by_torsion_id(torsion_id)
 
@@ -501,7 +520,7 @@ def plot_requested_torsion_scans(
         molecule_axis.imshow(_get_torsion_highlight_image(store=store, torsion_id=torsion_id))
         molecule_axis.axis("off")
 
-        for index, force_field in enumerate(force_fields):
+        for index, force_field in enumerate(torsion_force_fields):
             mm_energies = dict(
                 sorted(
                     store.get_mm_energies_by_torsion_id(
@@ -517,7 +536,6 @@ def plot_requested_torsion_scans(
 
             color = color_map[force_field]
             marker = markers[(index // 10) % len(markers)]
-            line_style = line_styles[index % len(line_styles)]
 
             mm_relative_energies = [
                 mm_energies[angle] - mm_energies[qm_minimum_angle]
@@ -534,7 +552,7 @@ def plot_requested_torsion_scans(
                 mm_relative_energies,
                 color=color,
                 marker=marker,
-                linestyle=line_style,
+                linestyle="-",
                 label=ff_label,
             )
 
@@ -553,7 +571,7 @@ def plot_requested_torsion_scans(
                 rmsd_values,
                 color=color,
                 marker=marker,
-                linestyle=line_style,
+                linestyle="-",
                 label=ff_label,
             )
 

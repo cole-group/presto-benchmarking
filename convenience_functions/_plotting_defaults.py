@@ -85,7 +85,8 @@ FORCE_FIELD_COLOR_PALETTE: tuple[str, ...] = (
     "#56B4E9",
 )
 
-# Explicit color overrides for force fields (raw keys or display names).
+# Explicit color overrides for force fields (raw keys, display names, or
+# short keys derived from combined_force_field.offxml parent directory names).
 # Fill this in to lock specific force fields to specific colours.
 FORCE_FIELD_COLOR_MAP: dict[str, str] = {
     # Explicit mappings for key force fields.
@@ -100,6 +101,12 @@ FORCE_FIELD_COLOR_MAP: dict[str, str] = {
     "openff-2.3.0": "#D55E00",
     "OpenFF\nBespokeFit/\nB3LYP-D3BJ/DZVP": "#CC79A7",
     "input_ff/bespokefit1_sage_jacs_frags.offxml": "#CC79A7",
+    # Ablation short keys (parent dir name from combined_force_field.offxml paths)
+    "default": "#0072B2",
+    "no_metad": "#009E73",
+    "no_min": "#CC79A7",
+    "one_it": "#E69F00",
+    "no_reg": "#56B4E9",
 }
 
 
@@ -111,8 +118,13 @@ def get_force_field_color_map(force_fields: list[str]) -> dict[str, str]:
     used_colors: set[str] = set()
 
     # Apply explicit overrides first, but avoid duplicates.
+    # For combined_force_field.offxml paths not found by full path, also try
+    # the parent directory name as a short key (e.g. "no_metad", "default").
     for force_field in ordered:
         color = FORCE_FIELD_COLOR_MAP.get(force_field)
+        if color is None and force_field.endswith("/combined_force_field.offxml"):
+            from pathlib import Path
+            color = FORCE_FIELD_COLOR_MAP.get(Path(force_field).parent.name)
         if color is not None and color not in used_colors:
             mapping[force_field] = color
             used_colors.add(color)
