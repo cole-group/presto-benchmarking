@@ -66,6 +66,10 @@ def validation_force_fields(wildcards: Any) -> list[str]:
         checkpoint_kwargs=checkpoint_kwargs,
     )
 
+def get_pixi_env(wc):
+    """Set the 0.5.1 presto env for older tnet500 and jacs_fragments datasets, 0.6.0 for everything else."""
+    env = "presto051" if wc.dataset in ("tnet500", "jacs_fragments") else "default"
+    return env
 
 def smiles_csv_input(wildcards: Any) -> str:
     """Resolve smiles.csv path for a dataset/split after the relevant checkpoint."""
@@ -240,7 +244,7 @@ rule run_presto:
     output:
         "benchmarking/{dataset}/output/{dataset_type}/{config_name}/{molecule}/bespoke_force_field.offxml",
     params:
-        pixi_environment=lambda wc: "presto051" if wc.dataset in ("tnet500", "jacs_fragments") else "default",
+        pixi_environment=get_pixi_env,
     threads: 32 # So that only one job at once runs on my workstation...
     resources:
         mem_mb=8000,
@@ -626,6 +630,7 @@ rule analyse_torsion_scans_yammbs:
     wildcard_constraints:
         dataset="tnet500|tnet500_reopt_v4|jacs_fragments|phosphate_torsion_drives",
     params:
+        pixi_env = get_pixi_env,
         analysis_dir=lambda wc: f"benchmarking/{wc.dataset}/analysis/{wc.dataset_type}/{wc.config_name}",
         presto_output_dir=lambda wc: f"benchmarking/{wc.dataset}/output/{wc.dataset_type}/{wc.config_name}",
         base_ff_opts=lambda wc: " ".join(
@@ -640,10 +645,10 @@ rule analyse_torsion_scans_yammbs:
         ),
         torsion_plot_id_opts=lambda wc: build_torsion_plot_opts(yammbs_target_config(wc)),
     shell:
-        "pixi run -e default presto-benchmark analyse-torsion-scans "
+        "pixi run -e {params.pixi_env} presto-benchmark analyse-torsion-scans "
         "{input.qca_data_json} {input.combined_ff} {params.analysis_dir} "
         "{params.base_ff_opts} {params.extra_ff_opts} {params.torsion_plot_id_opts} && "
-        "pixi run -e default presto-benchmark analyse-presto-fits "
+        "pixi run -e {params.pixi_env} presto-benchmark analyse-presto-fits "
         "{params.presto_output_dir} {params.analysis_dir}/plots "
         "--random-seed {RANDOM_SEED}"
 
