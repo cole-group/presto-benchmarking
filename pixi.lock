@@ -3049,7 +3049,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/8d/4c/e0370709aaf9d7ceb68f975cac559751e75954429a77e83202e680606560/opt_einsum_fx-0.1.4-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8a/69/6a93d8600c339d7687a05857c7907bd4dd8cf88691a5ea106d7a50af90a1/optax-0.2.8-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0e/a4/82b7a2fe5d8a67a59ed831b24d59a3d46ea7d207b66e1602d376541d94a6/orjson-3.11.9-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-      - pypi: git+https://github.com/cole-group/presto.git?tag=0.5.1#ecb2e96b4f317d1499266adeda607636959b232d
+      - pypi: git+https://github.com/cole-group/presto.git?rev=0435340e23afaa5a0f522cc85728b3b57f0a8094#0435340e23afaa5a0f522cc85728b3b57f0a8094
       - pypi: https://files.pythonhosted.org/packages/ee/8c/83087ebc47ab0396ce092363001fa37c17153119ee282700c0713a195853/prettytable-3.17.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/90/cc/bb6395c3f2b6bb739b1d3fc0e71f94e6a1c2e256df496237cbfd13cd74a6/python_hostlist-2.3.0.tar.gz
       - pypi: git+https://github.com/openforcefield/smee.git?rev=36bc8286b16ae815f13cfb10d8096ff1b9aeca0e#36bc8286b16ae815f13cfb10d8096ff1b9aeca0e
@@ -13273,9 +13273,9 @@ packages:
   - pkg:pypi/pre-commit?source=hash-mapping
   size: 201606
   timestamp: 1776858157327
-- pypi: git+https://github.com/cole-group/presto.git?tag=0.5.1#ecb2e96b4f317d1499266adeda607636959b232d
+- pypi: git+https://github.com/cole-group/presto.git?rev=0435340e23afaa5a0f522cc85728b3b57f0a8094#0435340e23afaa5a0f522cc85728b3b57f0a8094
   name: presto
-  version: 0.5.1
+  version: 0.5.2.dev2+g0435340e2
   requires_python: '>=3.11,<3.15'
 - pypi: git+https://github.com/cole-group/presto.git?rev=15d11cf9649df5a1497973cd413d2f354ba7e76c#15d11cf9649df5a1497973cd413d2f354ba7e76c
   name: presto
@@ -13288,7 +13288,7 @@ packages:
 - pypi: ./
   name: presto-benchmark
   version: 0.1.0
-  sha256: f131081c4f02aaabf54736165d171137d4051b23c577531cfe338411a714fcc1
+  sha256: 8c28892e95adc5aadde39b747ff9b0cdee26f3ce3ed05c052de1baa841449b2c
   requires_python: '>=3.11'
 - pypi: https://files.pythonhosted.org/packages/ee/8c/83087ebc47ab0396ce092363001fa37c17153119ee282700c0713a195853/prettytable-3.17.0-py3-none-any.whl
   name: prettytable

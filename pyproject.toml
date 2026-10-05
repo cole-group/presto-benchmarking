@@ -108,7 +108,8 @@ nvalchemi-toolkit-ops = "==0.2.0"
 presto = { git = "https://github.com/cole-group/presto.git", rev = "15d11cf9649df5a1497973cd413d2f354ba7e76c" }
 
 [tool.pixi.feature.presto-051.pypi-dependencies]
-presto = { git = "https://github.com/cole-group/presto.git", tag = "0.5.1" }
+# presto = { git = "https://github.com/cole-group/presto.git", tag = "0.5.1" }
+presto = { git = "https://github.com/cole-group/presto.git", rev = "0435340e23afaa5a0f522cc85728b3b57f0a8094" } # Allow dexp training
 
 [tool.pixi.feature.openeye.dependencies]
 openeye-toolkits = ">=2025.2.1,<2026"
