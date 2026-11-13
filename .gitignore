@@ -228,5 +228,8 @@ benchmarking/**/conformer-benchmark/
 !benchmarking/rbfe_sandbox/presto_ffs/**
 !benchmarking/rbfe_sandbox/README.md
 !benchmarking/rbfe_sandbox/results/bootstrap_statistics.csv
+!benchmarking/speed_comparison/analysis/*.csv
+!benchmarking/speed_comparison/analysis/*.tex
+!benchmarking/speed_comparison/analysis/instrumentation_overhead.json
 !benchmarking/rbfe_sandbox/results/statistical_tests.csv
 

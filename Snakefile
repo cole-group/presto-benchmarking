@@ -1269,3 +1269,134 @@ rule analyse_rbfe:
     shell:
         "pixi run -e default presto-benchmark analyse-rbfe "
         "{input.raw_data} {input.ligands} benchmarking/rbfe_sandbox/results"
+
+
+############ Speed comparison: presto vs OpenFF BespokeFit 0.4.4 #############
+# Every rule uses all 32 threads so that, with --cores 32, nothing runs alongside a
+# timed job. Run with `pixi run snakemake-speed`. run_00 is a warm-up (fills weight
+# and kernel caches) that later repeats wait for, and is excluded from statistics.
+
+SPEED = config["speed_comparison"]
+SPEED_DIR = "benchmarking/speed_comparison"
+BESPOKEFIT_ENVS = {
+    "aimnet2_matched": "bespokefit-ml",
+    "aimnet2_stock": "bespokefit-ml",
+    "qm": "bespokefit-qm",
+}
+
+
+def speed_repeats(method, warmup):
+    first = 0 if warmup else 1
+    return [f"{i:02d}" for i in range(first, SPEED["repeats"][method] + 1)]
+
+
+rule create_speed_comparison_smiles:
+    output:
+        f"{SPEED_DIR}/input/ligand.smi",
+    run:
+        Path(output[0]).write_text(SPEED["smiles"] + "\n")
+
+
+rule time_presto:
+    input:
+        smiles=rules.create_speed_comparison_smiles.output[0],
+        config_file=f"configs/{SPEED['presto_config']}.yaml",
+        warmup=lambda wc: [] if wc.repeat == "00" else f"{SPEED_DIR}/presto/run_00/timings.json",
+    output:
+        timings=f"{SPEED_DIR}/presto/run_{{repeat}}/timings.json",
+        # Whole-process wall time, measured as for time_presto_uninstrumented
+        wall_time=f"{SPEED_DIR}/presto/run_{{repeat}}/wall_time.json",
+    threads: 32
+    shell:
+        "PRESTO_TIMING_T0=$(date +%s.%N) /usr/bin/time -f '{{\"wall_s\": %e}}' "
+        "-o {output.wall_time} pixi run --frozen -e default presto-benchmark "
+        "run-presto-timed {input.config_file} {input.smiles} "
+        "$(dirname {output.timings})/fit {output.timings}"
+
+
+rule time_presto_uninstrumented:
+    input:
+        smiles=rules.create_speed_comparison_smiles.output[0],
+        config_file=f"configs/{SPEED['presto_config']}.yaml",
+        warmup=f"{SPEED_DIR}/presto/run_00/timings.json",
+    output:
+        f"{SPEED_DIR}/presto_uninstrumented/run_{{repeat}}/wall_time.json",
+    threads: 32
+    shell:
+        "/usr/bin/time -f '{{\"wall_s\": %e}}' -o {output} pixi run --frozen -e default "
+        "presto-benchmark run-presto {input.config_file} {input.smiles} $(dirname {output})/fit"
+
+
+rule time_bespokefit:
+    input:
+        smiles=rules.create_speed_comparison_smiles.output[0],
+        warmup=lambda wc: (
+            []
+            if wc.variant == "qm" or wc.repeat == "00"
+            else f"{SPEED_DIR}/bespokefit_{wc.variant}/run_00/timings.json"
+        ),
+    output:
+        f"{SPEED_DIR}/bespokefit_{{variant}}/run_{{repeat}}/timings.json",
+    wildcard_constraints:
+        variant="|".join(BESPOKEFIT_ENVS),
+    params:
+        pixi_environment=lambda wc: BESPOKEFIT_ENVS[wc.variant],
+    threads: 32
+    shell:
+        "BESPOKE_TIMING_T0=$(date +%s.%N) pixi run --frozen -e {params.pixi_environment} "
+        "python convenience_functions/standalone/run_bespokefit_timed.py "
+        "\"$(cat {input.smiles})\" {wildcards.variant} $(dirname {output})"
+
+
+rule aimnet2_parity:
+    """Same model and speed? AIMNet2 via presto (GPU and CPU) vs via QCEngine."""
+    output:
+        conformers=f"{SPEED_DIR}/aimnet2_parity_conformers.sdf",
+        arms=expand(
+            f"{SPEED_DIR}/aimnet2_parity/{{arm}}.json",
+            arm=["presto_cuda", "presto_cpu", "qcengine_openmm-ml", "qcengine_aimnet2"],
+        ),
+    params:
+        n_conformers=SPEED["aimnet2_parity"]["n_conformers"],
+        n_calls=SPEED["aimnet2_parity"]["n_calls_per_conformer"],
+        out_dir=f"{SPEED_DIR}/aimnet2_parity",
+    threads: 32
+    shell:
+        "pixi run --frozen -e default presto-benchmark aimnet2-parity-presto "
+        "\"{SPEED[smiles]}\" {output.conformers} {params.out_dir}/presto_cuda.json "
+        "--n-conformers {params.n_conformers} --n-calls-per-conformer {params.n_calls} && "
+        "CUDA_VISIBLE_DEVICES='' pixi run --frozen -e default presto-benchmark "
+        "aimnet2-parity-presto \"{SPEED[smiles]}\" {output.conformers} "
+        "{params.out_dir}/presto_cpu.json --n-conformers {params.n_conformers} "
+        "--n-calls-per-conformer {params.n_calls} && "
+        "for program in openmm-ml aimnet2; do "
+        "pixi run --frozen -e bespokefit-ml python "
+        "convenience_functions/standalone/aimnet2_parity_qcengine.py {output.conformers} "
+        "$program {params.n_calls} {params.out_dir}/qcengine_$program.json; done"
+
+
+rule analyse_speed_comparison:
+    input:
+        presto=expand(
+            f"{SPEED_DIR}/presto/run_{{repeat}}/timings.json",
+            repeat=speed_repeats("presto", warmup=True),
+        ),
+        presto_uninstrumented=expand(
+            f"{SPEED_DIR}/presto_uninstrumented/run_{{repeat}}/wall_time.json",
+            repeat=speed_repeats("presto_uninstrumented", warmup=False),
+        ),
+        bespokefit=[
+            f"{SPEED_DIR}/bespokefit_{variant}/run_{repeat}/timings.json"
+            for variant in BESPOKEFIT_ENVS
+            for repeat in speed_repeats(f"bespokefit_{variant}", warmup=variant != "qm")
+        ],
+        parity=rules.aimnet2_parity.output.arms,
+    output:
+        f"{SPEED_DIR}/analysis/summary.csv",
+        f"{SPEED_DIR}/analysis/summary.tex",
+        f"{SPEED_DIR}/analysis/presto_stage_breakdown.csv",
+        f"{SPEED_DIR}/analysis/presto_stage_breakdown.tex",
+        f"{SPEED_DIR}/analysis/aimnet2_parity.csv",
+        f"{SPEED_DIR}/analysis/phases.png",
+    shell:
+        "pixi run --frozen -e default presto-benchmark analyse-speed-comparison {SPEED_DIR}"

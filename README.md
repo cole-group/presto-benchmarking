@@ -36,6 +36,7 @@ pixi run snakemake --cores all benchmarking/tnet500/analysis/test/default/metric
 | **SI** Fit reproducibility / parameter convergence (TYK2) | `benchmarking/tyk2_reproducibility/analysis/parameter_variability/offxml_variability_summary.tex` |
 | **SI** Folmsbee phosphate/sulfonamide rerun (no MSM/MLP-min) | `benchmarking/folmsbee_conformers/analysis/phosphate_sulphonamide/aimnet2_no_msm_no_min/aggregate_stats.csv` |
 | **SI** TYK2 cyclopropanecarboxamide edge torsion scans | `benchmarking/tyk2_cyclopropyl_edges_torsions/analysis/metrics.json` |
+| Speed: presto vs OpenFF BespokeFit (not in `rule all`; see below) | `benchmarking/speed_comparison/analysis/summary.csv` |
 
 ### Reproducing the analyses without rerunning the fits
 
@@ -48,6 +49,27 @@ This sets `--config skip_fits=True`, which makes `create_combined_force_field` a
 The Folmsbee analyses use the raw fits only to list which molecules were fit; with `skip_fits` that molecule set is taken from the committed input SMILES instead, so they reproduce from the combined force field alone (a GPU is still needed for the AIMNet2 single points).
 
 Three results genuinely depend on the raw per-molecule fits (loss curves, per-atom energies, fit trajectories), so `skip_fits` drops them from the default target and leaves their committed summary outputs in place: the **SI presto validation per-atom energy RMSEs**, **SI fit reproducibility** (TYK2), and the **congeneric-series retrain** analysis. Recomputing those requires the full fitting stage.
+
+### Speed comparison: presto vs OpenFF BespokeFit
+
+`pixi run snakemake-speed` times fits of one TYK2 ligand (`workflow_config.yaml: speed_comparison`) with:
+
+| Method | AIMNet2 / QM | Repeats |
+| --- | --- | --- |
+| `presto` | AIMNet2 via openmm-ml, GPU (`configs/aimnet2_openff221.yaml`) | 5 (+ warm-up, + 2 without timing hooks, to measure their overhead) |
+| `bespokefit_aimnet2_matched` | BespokeFit 0.4.4 with AIMNet2 run exactly as in presto (same openmm-ml/aimnet/torch versions and model, GPU) via `convenience_functions/standalone/openmm_ml_harness.py` | 3 (+ warm-up) |
+| `bespokefit_aimnet2_stock` | BespokeFit 0.4.4 with QCEngine's own AIMNet2 harness (pyaimnet2 4-model ensemble, fp64, CPU) | 3 (+ warm-up) |
+| `bespokefit_qm` | BespokeFit 0.4.4, psi4 B3LYP-D3BJ/DZVP | 1 |
+
+This rule is expensive (the QM especially) and runs everything serially on one machine, so it is not part of `rule all`.
+- **presto** is timed stage by stage by wrapping presto's functions (`convenience_functions/presto_timing.py`), without changing what they do.
+- **BespokeFit** is timed per executor stage, plus every QC energy/gradient call (`convenience_functions/standalone/run_bespokefit_timed.py`). Stage times are accurate to about 5 s, the coordinator's update interval.
+
+`rule aimnet2_parity` checks that the AIMNet2 evaluations really match between environments, and compares their per-call cost.
+
+Caveats:
+- BespokeFit 0.4.4 needs pydantic 1, so it gets its own envs (`bespokefit-ml`, `bespokefit-qm`) and cannot load `openff_unconstrained-2.3.0` (that needs openff-toolkit >= 0.17). Both methods therefore start from `openff_unconstrained-2.2.1`, with OpenEye AM1-BCC charges.
+- BespokeFit fits torsions only. presto also fits bonds, angles and impropers.
 
 ### Requirements and notes
 

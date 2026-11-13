@@ -1,0 +1,5 @@
+arm,rel_energy_mae_kcal_mol,force_rmse_kcal_mol_A,median_call_ms,iqr_call_ms,torch_threads
+presto_cpu,0.0001,0.0,12.1535,0.2454,16
+presto_cuda,0.0,0.0,6.0373,0.2468,16
+qcengine_aimnet2,0.4923,0.9662,39.3896,0.4894,16
+qcengine_openmm-ml,0.0,0.0,7.6518,0.2645,16

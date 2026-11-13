@@ -28,6 +28,45 @@ def run_presto_cli(
     )
 
 
+@app.command("run-presto-timed")
+def run_presto_timed_cli(
+    config_path: Path = typer.Argument(..., help="Path to PRESTO config file"),
+    smiles_path: Path = typer.Argument(..., help="Path to SMILES input file"),
+    output_dir: Path = typer.Argument(..., help="Output directory for force field"),
+    timings_path: Path = typer.Argument(..., help="Output JSON of per-stage timings"),
+) -> None:
+    """Run PRESTO with every stage of the fit timed."""
+    from convenience_functions.presto_timing import run_presto_timed
+
+    run_presto_timed(config_path, smiles_path, output_dir, timings_path)
+
+
+@app.command("aimnet2-parity-presto")
+def aimnet2_parity_presto_cli(
+    smiles: str = typer.Argument(..., help="SMILES of the test molecule"),
+    conformers_sdf: Path = typer.Argument(..., help="Conformer SDF (made if absent)"),
+    out_json: Path = typer.Argument(..., help="Energies, forces and call times"),
+    n_conformers: int = typer.Option(20, help="Number of conformers"),
+    n_calls_per_conformer: int = typer.Option(5, help="Timed calls per conformer"),
+) -> None:
+    """Time AIMNet2 energy+force calls through presto's own code path."""
+    from convenience_functions.aimnet2_parity_presto import aimnet2_parity_presto
+
+    aimnet2_parity_presto(
+        smiles, n_conformers, n_calls_per_conformer, conformers_sdf, out_json
+    )
+
+
+@app.command("analyse-speed-comparison")
+def analyse_speed_comparison_cli(
+    root: Path = typer.Argument(..., help="benchmarking/speed_comparison directory"),
+) -> None:
+    """Summarise presto vs BespokeFit timings into tables and plots."""
+    from convenience_functions.speed_comparison import analyse_speed_comparison
+
+    analyse_speed_comparison(root)
+
+
 @app.command("combine-force-fields")
 def combine_force_fields_cli(
     output_file: Path = typer.Argument(..., help="Path to output combined force field"),

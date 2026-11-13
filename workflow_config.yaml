@@ -188,3 +188,19 @@ protein_1mer_joint_fit:
   config_names:
     - "orb_max_extend_1"
 
+
+# presto vs OpenFF BespokeFit 0.4.4 speed comparison (not part of `rule all`; see README)
+speed_comparison:
+  smiles: "CCC(CC)C(=O)Nc2cc(NC(=O)c1c(Cl)cccc1Cl)ccn2"  # TYK2 ligand
+  presto_config: "aimnet2_openff221"  # same start as bespokefit (2.3.0 needs toolkit >=0.17)
+  # Timed repeats per method. presto and the AIMNet2 bespokefit variants also get a
+  # warm-up run_00 (excluded from statistics).
+  repeats:
+    presto: 5
+    presto_uninstrumented: 2  # checks the timing instrumentation's overhead
+    bespokefit_aimnet2_matched: 3
+    bespokefit_aimnet2_stock: 3
+    bespokefit_qm: 1  # ~1 h per torsion drive for a small fragment
+  aimnet2_parity:
+    n_conformers: 20
+    n_calls_per_conformer: 5
