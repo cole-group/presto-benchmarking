@@ -140,13 +140,6 @@ folmsbee_analysis:
       subset_selection_strategy: "name"
       subset_seed: 0
 
-# TYK2 reproducibility benchmark configuration
-tyk2_reproducibility:
-  smiles: "CCC(CC)C(=O)Nc2cc(NC(=O)c1c(Cl)cccc1Cl)ccn2"
-  repeats: 10
-  config_name: "aimnet2"
-  pixi_environment: "default-save-ff-trajectory"
-
 # TYK2 congeneric series benchmark configuration
 tyk2_congeneric_series:
   smiles:
@@ -204,3 +197,51 @@ speed_comparison:
   aimnet2_parity:
     n_conformers: 20
     n_calls_per_conformer: 5
+
+
+# Fit robustness: repeat fits x torsion regularisation strength, with timings.
+# Each molecule is scored against its own QM data: QCArchive torsion drives
+# ("torsion"), Folmsbee DLPNO conformer energies ("folmsbee"), or none.
+fit_robustness:
+  dir: "benchmarking/fit_robustness"
+  pixi_environment: "default-save-ff-trajectory" # So we can watch the evolution of parameters during the fit.
+  configs:
+    reg0: "configs/aimnet2_reg0.yaml"    # no torsion regularisation
+    reg1: "configs/aimnet2.yaml"         # default (k: 1.0)
+    reg10: "configs/aimnet2_reg10.yaml"  # 10x
+  repeats: {reg0: 5, reg1: 10, reg10: 5}
+  warmup_molecule: "folmsbee_flex"  # largest molecule: first fit measures the worst-case time
+  molecules:
+    tyk2:  # neutral TYK2 ligand of the original reproducibility study; no QM data
+      qm: "none"
+      smiles: "CCC(CC)C(=O)Nc2cc(NC(=O)c1c(Cl)cccc1Cl)ccn2"
+    # Anionic model glycerophospholipid: dipropanoyl glycerol-3-phosphate methyl ester
+    # (S enantiomer, as in the QCA record). Of the set's charged molecules it has the most
+    # torsion drives of any molecule.
+    lipid:
+      qm: "torsion"
+      smiles: "[C@H](COC(=O)CC)(COP(=O)([O-])OC)OC(=O)CC"
+      qca_dataset: "OpenFF Lipid Torsion Drives v4.0"
+      qcarchive_ids: [146649972, 146649973, 146649974, 146649975, 146649976, 146649977,
+                      146649978, 146649979, 146649980, 146649981, 146649982]
+    folmsbee_flex:  # neutral, many rotatable bonds without being too large (for speed)
+      qm: "folmsbee"
+      smiles: "c1n(cnc1C(=O)N)[C@@H](CO)CCn1ccc2c1cc(cc2)NC(=O)CCc1ccccc1"
+      folmsbee_id: "astex_1uml"
+    # JACS fragments v2 (B3LYP-D3BJ/DZVP torsion drives): per formal charge, the
+    # molecule with >= 2 torsion drives with ~ average presto RMSE for the charge class.
+    anion:
+      qm: "torsion"
+      smiles: "COC(=O)Nc1cccc(-c2sc(C(=O)[O-])cc2Br)c1"
+      qca_dataset: "OpenFF-benchmark-ligand-fragments-v2.0"
+      qcarchive_ids: [80031016, 80030467]
+    cation:
+      qm: "torsion"
+      smiles: "CNC(=O)[C@H]1CCCN1C(=O)[C@H]([NH3+])Cc1ccccc1"
+      qca_dataset: "OpenFF-benchmark-ligand-fragments-v2.0"
+      qcarchive_ids: [80031744, 80031742, 80031743]
+    neutral_fragment:  # a TYK2 cyclopropanecarboxamide fragment
+      qm: "torsion"
+      smiles: "O=C(Nc1ccccn1)[C@H]1C[C@@H]1Cl"
+      qca_dataset: "OpenFF-benchmark-ligand-fragments-v2.0"
+      qcarchive_ids: [80032941, 80032956, 80032949]

@@ -205,6 +205,10 @@ snakemake-no-refit = { cmd = "snakemake --config skip_fits=True --cores all" }
 # presto vs BespokeFit speed comparison (expensive; QM can take days). Uses all 32
 # cores per job so nothing runs alongside a timed fit.
 snakemake-speed = { cmd = "snakemake --cores 32 benchmarking/speed_comparison/analysis/summary.csv" }
+# Fit robustness study (~45 h of fits + analysis on one GPU; see README). All fits,
+# then the analysis of whichever fits finished: `;` not `&&`, so the analysis still
+# runs if a fit failed.
+snakemake-robustness = { cmd = "snakemake robustness_fits --cores all; snakemake benchmarking/fit_robustness/analysis/summary/qm_accuracy.csv robustness_torsion_reports --cores all --resources exclusive=1 --config robustness_existing_only=True" }
 pre-commit = { cmd = "pre-commit run --all-files" }
 lint = { cmd = "ruff check convenience_functions" }
 format = { cmd = "ruff format convenience_functions && ruff check --fix --select I convenience_functions" }

@@ -310,6 +310,11 @@ def analyse_folmsbee_cli(
             "fields without the fitting stage)"
         ),
     ),
+    skip_detailed_analysis: bool = typer.Option(
+        False,
+        "--skip-detailed-analysis",
+        help="Only write results/stats CSVs (no paper-method comparison plots)",
+    ),
 ) -> None:
     """Analyse Folmsbee conformer energies with restrained minimization."""
     from convenience_functions.analyse_folmsbee import analyse_folmsbee
@@ -332,6 +337,7 @@ def analyse_folmsbee_cli(
         min_conformers_per_molecule=min_conformers_per_molecule,
         min_reference_energy_window=min_reference_energy_window,
         molecule_roster_smiles_dir=smiles_dir,
+        skip_detailed_analysis=skip_detailed_analysis,
     )
 
 
@@ -807,6 +813,20 @@ def analyse_tyk2_reproducibility_cli(
         sample_every_n_epochs=sample_every_n_epochs,
         run_ids=run_ids or None,
     )
+
+
+@app.command("summarise-fit-robustness")
+def summarise_fit_robustness_cli(
+    root: Path = typer.Argument(..., help="benchmarking/fit_robustness"),
+    molecules_qm: str = typer.Argument(..., help='JSON {molecule: "torsion"|"folmsbee"|"none"}'),
+    force_fields: list[str] = typer.Argument(..., help="Fitted bespoke_force_field.offxml paths"),
+) -> None:
+    """Summarise QM accuracy, parameter spread, MLP error and timings of repeat fits."""
+    import json
+
+    from convenience_functions.fit_robustness import summarise_fit_robustness
+
+    summarise_fit_robustness(root, json.loads(molecules_qm), force_fields)
 
 
 @app.command("analyse-rbfe")
