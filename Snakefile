@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Any
 import json
 import tempfile
+import shutil
 
 configfile: "workflow_config.yaml"
 
@@ -265,8 +266,8 @@ FIT_DEPENDENT_TARGETS = [
     # SI presto validation-set per-atom energy RMSEs
     "benchmarking/analysis/presto_fit_validation/presto_fit_validation_error_aggregate.csv",
     "benchmarking/analysis/presto_fit_validation/presto_fit_validation_error_aggregate.tex",
-    # SI fit reproducibility / parameter convergence (TYK2 ligand, 10 repeats)
-    "benchmarking/tyk2_reproducibility/analysis/parameter_variability/offxml_variability_summary.tex",
+    # The fit robustness study is not here: like the speed comparison it needs one
+    # dedicated GPU workstation (`pixi run snakemake-robustness`; see README).
 ]
 
 
@@ -349,71 +350,6 @@ rule create_combined_force_field:
         "benchmarking/{dataset}/output/{dataset_type}/{config_name}/combined_force_field.offxml",
     shell:
         "pixi run -e default presto-benchmark combine-force-fields {output[0]} '{input.force_fields}'"
-
-
-rule create_tyk2_reproducibility_smiles:
-    output:
-        "benchmarking/tyk2_reproducibility/input/tyk2.smi",
-    run:
-        tyk2_config = config["tyk2_reproducibility"]
-        output_path = Path(output[0])
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(f"{tyk2_config['smiles']}\n")
-
-
-rule run_tyk2_reproducibility:
-    input:
-        smiles_file=rules.create_tyk2_reproducibility_smiles.output[0],
-        config_file=lambda wc: (
-            f"configs/{config['tyk2_reproducibility'].get('config_name', 'default')}.yaml"
-        ),
-    output:
-        expand(
-            "benchmarking/tyk2_reproducibility/output/run_{repeat:02d}/bespoke_force_field.offxml",
-            repeat=range(
-                1, config["tyk2_reproducibility"].get("repeats", 10) + 1
-            ),
-        ),
-    params:
-        repeats=lambda wc: config["tyk2_reproducibility"].get("repeats", 10),
-        pixi_environment=lambda wc: config["tyk2_reproducibility"].get(
-            "pixi_environment", "default-save-ff-trajectory"
-        ),
-    resources:
-        mem_mb=8000,
-        runtime=240,  # minutes
-        slurm_partition="gpu-s_free",
-        slurm_extra="--gpus-per-task=1",
-    shell:
-        "for i in $(seq -w 1 {params.repeats}); do "
-        "pixi run -e {params.pixi_environment} presto-benchmark run-presto "
-        "{input.config_file} {input.smiles_file} benchmarking/tyk2_reproducibility/output/run_$i; "
-        "done"
-
-
-rule analyse_tyk2_reproducibility:
-    input:
-        rules.run_tyk2_reproducibility.output
-    output:
-        "benchmarking/tyk2_reproducibility/analysis/parameter_variability/offxml_parameter_values.csv",
-        "benchmarking/tyk2_reproducibility/analysis/parameter_variability/offxml_variability_summary.csv",
-        "benchmarking/tyk2_reproducibility/analysis/parameter_variability/offxml_variability_summary.tex",
-        "benchmarking/tyk2_reproducibility/analysis/parameter_variability/offxml_parameter_values_boxplot.png",
-        "benchmarking/tyk2_reproducibility/analysis/parameter_variability/offxml_parameter_values_boxplot_shifted.png",
-        "benchmarking/tyk2_reproducibility/analysis/parameter_variability/tensor_parameter_trajectories.csv",
-        "benchmarking/tyk2_reproducibility/analysis/parameter_variability/tensor_mean_signed_change_vs_epoch.png",
-        "benchmarking/tyk2_reproducibility/analysis/parameter_variability/tensor_mean_absolute_change_vs_epoch.png",
-        "benchmarking/tyk2_reproducibility/analysis/parameter_variability/tensor_individual_trajectories.png",
-        "benchmarking/tyk2_reproducibility/analysis/parameter_variability/tensor_individual_trajectories_unshifted.png",
-    params:
-        sample_every_n_epochs=lambda wc: config["tyk2_reproducibility"].get(
-            "sample_every_n_epochs", 50
-        ),
-    shell:
-        "pixi run -e default presto-benchmark analyse-tyk2-reproducibility "
-        "benchmarking/tyk2_reproducibility/output "
-        "benchmarking/tyk2_reproducibility/analysis/parameter_variability "
-        "--sample-every-n-epochs {params.sample_every_n_epochs}"
 
 
 rule create_tyk2_congeneric_series_smiles:
@@ -1269,3 +1205,364 @@ rule analyse_rbfe:
     shell:
         "pixi run -e default presto-benchmark analyse-rbfe "
         "{input.raw_data} {input.ligands} benchmarking/rbfe_sandbox/results"
+
+
+############ Speed comparison: presto vs OpenFF BespokeFit 0.4.4 #############
+# Every rule uses all 32 threads so that, with --cores 32, nothing runs alongside a
+# timed job. Run with `pixi run snakemake-speed`. run_00 is a warm-up (fills weight
+# and kernel caches) that later repeats wait for, and is excluded from statistics.
+
+SPEED = config["speed_comparison"]
+SPEED_DIR = "benchmarking/speed_comparison"
+BESPOKEFIT_ENVS = {
+    "aimnet2_matched": "bespokefit-ml",
+    "aimnet2_stock": "bespokefit-ml",
+    "qm": "bespokefit-qm",
+}
+
+
+def speed_repeats(method, warmup):
+    first = 0 if warmup else 1
+    return [f"{i:02d}" for i in range(first, SPEED["repeats"][method] + 1)]
+
+
+rule create_speed_comparison_smiles:
+    output:
+        f"{SPEED_DIR}/input/ligand.smi",
+    run:
+        Path(output[0]).write_text(SPEED["smiles"] + "\n")
+
+
+rule time_presto:
+    input:
+        smiles=rules.create_speed_comparison_smiles.output[0],
+        config_file=f"configs/{SPEED['presto_config']}.yaml",
+        warmup=lambda wc: [] if wc.repeat == "00" else f"{SPEED_DIR}/presto/run_00/timings.json",
+    output:
+        timings=f"{SPEED_DIR}/presto/run_{{repeat}}/timings.json",
+        # Whole-process wall time, measured as for time_presto_uninstrumented
+        wall_time=f"{SPEED_DIR}/presto/run_{{repeat}}/wall_time.json",
+    threads: 32
+    shell:
+        "PRESTO_TIMING_T0=$(date +%s.%N) /usr/bin/time -f '{{\"wall_s\": %e}}' "
+        "-o {output.wall_time} pixi run --frozen -e default presto-benchmark "
+        "run-presto-timed {input.config_file} {input.smiles} "
+        "$(dirname {output.timings})/fit {output.timings}"
+
+
+rule time_presto_uninstrumented:
+    input:
+        smiles=rules.create_speed_comparison_smiles.output[0],
+        config_file=f"configs/{SPEED['presto_config']}.yaml",
+        warmup=f"{SPEED_DIR}/presto/run_00/timings.json",
+    output:
+        f"{SPEED_DIR}/presto_uninstrumented/run_{{repeat}}/wall_time.json",
+    threads: 32
+    shell:
+        "/usr/bin/time -f '{{\"wall_s\": %e}}' -o {output} pixi run --frozen -e default "
+        "presto-benchmark run-presto {input.config_file} {input.smiles} $(dirname {output})/fit"
+
+
+rule time_bespokefit:
+    input:
+        smiles=rules.create_speed_comparison_smiles.output[0],
+        warmup=lambda wc: (
+            []
+            if wc.variant == "qm" or wc.repeat == "00"
+            else f"{SPEED_DIR}/bespokefit_{wc.variant}/run_00/timings.json"
+        ),
+    output:
+        f"{SPEED_DIR}/bespokefit_{{variant}}/run_{{repeat}}/timings.json",
+    wildcard_constraints:
+        variant="|".join(BESPOKEFIT_ENVS),
+    params:
+        pixi_environment=lambda wc: BESPOKEFIT_ENVS[wc.variant],
+    threads: 32
+    shell:
+        "BESPOKE_TIMING_T0=$(date +%s.%N) pixi run --frozen -e {params.pixi_environment} "
+        "python convenience_functions/standalone/run_bespokefit_timed.py "
+        "\"$(cat {input.smiles})\" {wildcards.variant} $(dirname {output})"
+
+
+rule aimnet2_parity:
+    """Same model and speed? AIMNet2 via presto (GPU and CPU) vs via QCEngine."""
+    output:
+        conformers=f"{SPEED_DIR}/aimnet2_parity_conformers.sdf",
+        arms=expand(
+            f"{SPEED_DIR}/aimnet2_parity/{{arm}}.json",
+            arm=["presto_cuda", "presto_cpu", "qcengine_openmm-ml", "qcengine_aimnet2"],
+        ),
+    params:
+        n_conformers=SPEED["aimnet2_parity"]["n_conformers"],
+        n_calls=SPEED["aimnet2_parity"]["n_calls_per_conformer"],
+        out_dir=f"{SPEED_DIR}/aimnet2_parity",
+    threads: 32
+    shell:
+        "pixi run --frozen -e default presto-benchmark aimnet2-parity-presto "
+        "\"{SPEED[smiles]}\" {output.conformers} {params.out_dir}/presto_cuda.json "
+        "--n-conformers {params.n_conformers} --n-calls-per-conformer {params.n_calls} && "
+        "CUDA_VISIBLE_DEVICES='' pixi run --frozen -e default presto-benchmark "
+        "aimnet2-parity-presto \"{SPEED[smiles]}\" {output.conformers} "
+        "{params.out_dir}/presto_cpu.json --n-conformers {params.n_conformers} "
+        "--n-calls-per-conformer {params.n_calls} && "
+        "for program in openmm-ml aimnet2; do "
+        "pixi run --frozen -e bespokefit-ml python "
+        "convenience_functions/standalone/aimnet2_parity_qcengine.py {output.conformers} "
+        "$program {params.n_calls} {params.out_dir}/qcengine_$program.json; done"
+
+
+rule analyse_speed_comparison:
+    input:
+        presto=expand(
+            f"{SPEED_DIR}/presto/run_{{repeat}}/timings.json",
+            repeat=speed_repeats("presto", warmup=True),
+        ),
+        presto_uninstrumented=expand(
+            f"{SPEED_DIR}/presto_uninstrumented/run_{{repeat}}/wall_time.json",
+            repeat=speed_repeats("presto_uninstrumented", warmup=False),
+        ),
+        bespokefit=[
+            f"{SPEED_DIR}/bespokefit_{variant}/run_{repeat}/timings.json"
+            for variant in BESPOKEFIT_ENVS
+            for repeat in speed_repeats(f"bespokefit_{variant}", warmup=variant != "qm")
+        ],
+        parity=rules.aimnet2_parity.output.arms,
+    output:
+        f"{SPEED_DIR}/analysis/summary.csv",
+        f"{SPEED_DIR}/analysis/summary.tex",
+        f"{SPEED_DIR}/analysis/presto_stage_breakdown.csv",
+        f"{SPEED_DIR}/analysis/presto_stage_breakdown.tex",
+        f"{SPEED_DIR}/analysis/aimnet2_parity.csv",
+        f"{SPEED_DIR}/analysis/phases.png",
+    shell:
+        "pixi run --frozen -e default presto-benchmark analyse-speed-comparison {SPEED_DIR}"
+
+
+############ Fit robustness: repeats x regularisation, with timings #############
+# Repeat presto fits of a few diverse molecules at three torsion-regularisation
+# strengths, scoring each fit against the molecule's own QM data and timing it.
+# Run with `pixi run snakemake-robustness` (see pyproject.toml).
+# run_00 is a warm-up fit excluded from all statistics.
+
+ROB = config["fit_robustness"]
+ROB_DIR = ROB["dir"]
+# Driver override: analyse only finished fits, so a failed fit doesn't block the summary.
+ROB_EXISTING_ONLY = str(config.get("robustness_existing_only", "")).lower() in ("true", "1")
+
+
+def rob_run_dir(molecule, reg, repeat):
+    return f"{ROB_DIR}/output/{molecule}/{reg}/run_{repeat:02d}"
+
+
+def rob_runs(molecule, reg):
+    """Run dirs (excluding the run_00 warm-up) that the analyses expect."""
+    runs = [rob_run_dir(molecule, reg, i) for i in range(1, ROB["repeats"][reg] + 1)]
+    if ROB_EXISTING_ONLY:
+        runs = [r for r in runs if Path(f"{r}/bespoke_force_field.offxml").exists()]
+    return runs
+
+
+def rob_ffs(molecule, regs=None):
+    return [
+        f"{run}/bespoke_force_field.offxml"
+        for reg in (regs or ROB["configs"])
+        for run in rob_runs(molecule, reg)
+    ]
+
+
+def rob_molecules(qm):
+    return [name for name, mol in ROB["molecules"].items() if mol["qm"] == qm]
+
+
+wildcard_constraints:
+    rob_molecule="|".join(ROB["molecules"]),
+    rob_reg="|".join(ROB["configs"]),
+    rob_repeat=r"\d\d",
+
+
+rule create_robustness_smiles:
+    output:
+        f"{ROB_DIR}/input/{{rob_molecule}}.smi",
+    run:
+        Path(output[0]).write_text(ROB["molecules"][wildcards.rob_molecule]["smiles"] + "\n")
+
+
+# run_presto's generic benchmarking/{dataset}/output/... pattern also matches these paths
+ruleorder: fit_robustness > run_presto
+
+
+rule fit_robustness:
+    input:
+        smiles=rules.create_robustness_smiles.output[0],
+        config_file=lambda wc: ROB["configs"][wc.rob_reg],
+    # protected: finished fits are read-only and snakemake refuses to redo them (the shell's
+    # rm -rf would otherwise wipe a finished fit if any rerun trigger fires).
+    output:
+        ff=protected(f"{ROB_DIR}/output/{{rob_molecule}}/{{rob_reg}}/run_{{rob_repeat}}/bespoke_force_field.offxml"),
+        timings=protected(f"{ROB_DIR}/output/{{rob_molecule}}/{{rob_reg}}/run_{{rob_repeat}}/timings.json"),
+        wall_time=protected(f"{ROB_DIR}/output/{{rob_molecule}}/{{rob_reg}}/run_{{rob_repeat}}/wall_time.json"),
+    params:
+        run_dir=lambda wc, output: Path(output.ff).parent,
+    threads: workflow.cores  # claim every core: one fit at a time, so timings are clean
+    shell:
+        # Clear leftovers of a failed attempt: presto writes many undeclared files.
+        "rm -rf {params.run_dir} && mkdir -p {params.run_dir} && "
+        "PRESTO_TIMING_T0=$(date +%s.%N) /usr/bin/time -f '{{\"wall_s\": %e}}' "
+        # timeout: a hung fit (fits take ~20-30 min) would otherwise stall all later fits
+        "-o {output.wall_time} timeout 2h pixi run --frozen --offline -e {ROB[pixi_environment]} "
+        "presto-benchmark run-presto-timed {input.config_file} {input.smiles} "
+        "{params.run_dir} {output.timings} > {params.run_dir}/presto.log 2>&1"
+
+
+rule robustness_fits:
+    """Every fit, plus the warm-up."""
+    input:
+        f"{rob_run_dir(ROB['warmup_molecule'], 'reg1', 0)}/bespoke_force_field.offxml",
+        [ff for molecule in ROB["molecules"] for ff in rob_ffs(molecule)],
+
+
+rule get_robustness_qca_input:
+    output:
+        f"{ROB_DIR}/input/{{rob_molecule}}.json",
+    params:
+        dataset=lambda wc: ROB["molecules"][wc.rob_molecule]["qca_dataset"],
+        id_opts=lambda wc: " ".join(
+            f"--qcarchive-id {i}" for i in ROB["molecules"][wc.rob_molecule]["qcarchive_ids"]
+        ),
+    shell:
+        "pixi run --frozen --offline -e default presto-benchmark get-qca-torsion-input "
+        "'{params.dataset}' {output} {params.id_opts}"
+
+
+rule analyse_robustness_torsions:
+    input:
+        qca=rules.get_robustness_qca_input.output[0],
+        ffs=lambda wc: rob_ffs(wc.rob_molecule),
+    output:
+        f"{ROB_DIR}/analysis/{{rob_molecule}}/torsions/metrics.json",
+    params:
+        out_dir=lambda wc, output: Path(output[0]).parent,
+        # The CLI adds its positional force field to the extras itself.
+        extra_ff_opts=lambda wc, input: " ".join(
+            f"--extra-force-field {ff}" for ff in input.ffs[1:]
+        ),
+    resources:
+        exclusive=1,
+    shell:
+        # Fresh database: yammbs skips any force field already scored under the same name
+        # (its offxml path), so a refit would otherwise silently keep the old fit's scores.
+        "rm -f {params.out_dir}/torsion-data.sqlite && "
+        "pixi run --frozen --offline -e default presto-benchmark analyse-torsion-scans "
+        "{input.qca} {input.ffs[0]} {params.out_dir} "
+        "--base-force-field openff-2.3.0 {params.extra_ff_opts}"
+
+
+rule robustness_torsion_summary_html:
+    """yammbs per-torsion HTML report (scan overlays + metrics): Sage and one reg's repeats."""
+    input:
+        rules.analyse_robustness_torsions.output[0],
+    output:
+        f"{ROB_DIR}/analysis/{{rob_molecule}}/torsions/summary_{{rob_reg}}.html",
+    run:
+        from yammbs.torsion import TorsionStore
+
+        store = TorsionStore(str(Path(input[0]).parent / "torsion-data.sqlite"))
+        # Every fit the store scored for this reg (force-field names are the offxml paths)
+        reg_ffs = [ff for ff in store.get_force_fields() if f"/{wildcards.rob_reg}/" in ff]
+        ffs = ["openff-2.3.0", *sorted(reg_ffs)]
+        store.get_summary(output[0], force_fields=ffs)
+
+
+rule robustness_torsion_reports:
+    input:
+        expand(
+            f"{ROB_DIR}/analysis/{{m}}/torsions/summary_{{reg}}.html",
+            m=rob_molecules("torsion"),
+            reg=ROB["configs"],
+        ),
+
+
+rule create_robustness_folmsbee_smiles:
+    """Folmsbee analysis finds conformers by file name, so name it by Folmsbee ID.
+    process_folmsbee_smiles writes the conformer .openff.sdf files the analysis loads,
+    and a .smi only for molecules whose conformers all built, so copy from there."""
+    input:
+        processed=rules.process_folmsbee_smiles.output[0],
+    output:
+        smi_dir=directory(f"{ROB_DIR}/input/folmsbee_{{rob_molecule}}"),
+        empty_dir=directory(f"{ROB_DIR}/input/folmsbee_{{rob_molecule}}_no_fits"),
+    run:
+        smi = f"{ROB['molecules'][wildcards.rob_molecule]['folmsbee_id']}.smi"
+        Path(output.smi_dir).mkdir(parents=True)
+        Path(output.empty_dir).mkdir(parents=True)
+        shutil.copy(Path(input.processed) / smi, Path(output.smi_dir) / smi)
+
+
+rule analyse_robustness_folmsbee:
+    input:
+        gh_repo=rules.get_folmsbee_conformer_input.output[0],
+        smi_dir=rules.create_robustness_folmsbee_smiles.output.smi_dir,
+        empty_dir=rules.create_robustness_folmsbee_smiles.output.empty_dir,
+        ffs=lambda wc: rob_ffs(wc.rob_molecule),
+    output:
+        f"{ROB_DIR}/analysis/{{rob_molecule}}/folmsbee/per_molecule_stats.csv",
+    params:
+        out_dir=lambda wc, output: Path(output[0]).parent,
+        ff_opts=lambda wc, input: " ".join(f"--force-field {ff}" for ff in input.ffs),
+        fa=config["folmsbee_analysis"],
+    resources:
+        exclusive=1,
+    shell:
+        "pixi run --frozen --offline -e default presto-benchmark analyse-folmsbee "
+        "{input.gh_repo} {input.empty_dir} {params.out_dir} "
+        "--smiles-dir {input.smi_dir} --skip-detailed-analysis "
+        "--reference-method {params.fa[reference_method]} "
+        "--torsion-restraint-force-constant {params.fa[torsion_restraint_force_constant]} "
+        "--mm-minimization-steps {params.fa[mm_minimization_steps]} "
+        "--min-conformers-per-molecule {params.fa[min_conformers_per_molecule]} "
+        "--force-field input_ff/openff_unconstrained-2.3.0.offxml {params.ff_opts}"
+
+
+rule analyse_robustness_parameters:
+    input:
+        ffs=lambda wc: rob_ffs(wc.rob_molecule, [wc.rob_reg]),
+    output:
+        f"{ROB_DIR}/analysis/{{rob_molecule}}/parameters/{{rob_reg}}/offxml_variability_summary.csv",
+    params:
+        out_dir=lambda wc, output: Path(output[0]).parent,
+        run_opts=lambda wc, input: " ".join(
+            f"--run-id {Path(ff).parent.name}" for ff in input.ffs
+        ),
+    resources:
+        exclusive=1,
+    shell:
+        "pixi run --frozen --offline -e default presto-benchmark analyse-tyk2-reproducibility "
+        "{ROB_DIR}/output/{wildcards.rob_molecule}/{wildcards.rob_reg} {params.out_dir} "
+        "{params.run_opts}"
+
+
+rule summarise_fit_robustness:
+    input:
+        torsions=expand(
+            f"{ROB_DIR}/analysis/{{m}}/torsions/metrics.json", m=rob_molecules("torsion")
+        ),
+        folmsbee=expand(
+            f"{ROB_DIR}/analysis/{{m}}/folmsbee/per_molecule_stats.csv",
+            m=rob_molecules("folmsbee"),
+        ),
+        parameters=expand(
+            f"{ROB_DIR}/analysis/{{m}}/parameters/{{reg}}/offxml_variability_summary.csv",
+            m=ROB["molecules"],
+            reg=ROB["configs"],
+        ),
+        ffs=[ff for molecule in ROB["molecules"] for ff in rob_ffs(molecule)],
+    output:
+        f"{ROB_DIR}/analysis/summary/qm_accuracy.csv",
+        f"{ROB_DIR}/analysis/summary/parameter_spread.csv",
+        f"{ROB_DIR}/analysis/summary/mlp_heldout.csv",
+        f"{ROB_DIR}/analysis/summary/timings.csv",
+    params:
+        molecules=json.dumps({k: v["qm"] for k, v in ROB["molecules"].items()}),
+    shell:
+        "pixi run --frozen --offline -e default presto-benchmark summarise-fit-robustness "
+        "{ROB_DIR} '{params.molecules}' {input.ffs}"

@@ -1766,6 +1766,7 @@ def analyse_folmsbee(
     min_conformers_per_molecule: int = 5,
     min_reference_energy_window: float = 0.0,
     molecule_roster_smiles_dir: Path | None = None,
+    skip_detailed_analysis: bool = False,
 ) -> None:
     """Evaluate and compare conformer energies from the Folmsbee/Hutchison benchmark.
 
@@ -1801,6 +1802,10 @@ def analyse_folmsbee(
         ``-1`` = single-point, no minimisation).
     n_processes:
         Worker processes for parallelism.  Defaults to ``cpu_count - 1``.
+    skip_detailed_analysis:
+        If ``True``, stop after writing results.csv and the per-molecule and aggregate
+        stats (with per-molecule plots); skip the overall distribution plots and the
+        detailed paper-method analysis, which assume one fit per molecule.
     """
     mlp_names = mlp_names or []
     exclude_smarts = exclude_smarts or []
@@ -2098,6 +2103,11 @@ def analyse_folmsbee(
     reference_df.to_csv(output_dir / "results.csv", index=False)
     per_molecule_stats_df.to_csv(output_dir / "per_molecule_stats.csv", index=False)
     aggregate_stats_df.to_csv(output_dir / "aggregate_stats.csv", index=False)
+
+    # The overall plots and detailed analysis assume one fit per molecule and the
+    # full paper method set (presto, espaloma, ...).
+    if skip_detailed_analysis:
+        return
 
     _plot_overall_metric_distribution(per_molecule_stats_df, "rmse_kcal_mol",
                                       plot_dir / "overall_rmse_distribution.png")
