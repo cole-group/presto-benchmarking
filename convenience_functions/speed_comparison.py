@@ -39,6 +39,12 @@ PHASE_LABELS = {
     "diagnostics": "Diagnostics (presto only)",
     "other": "Other",
 }
+# Methods shown in the publication table, with their display names
+TABLE_METHODS = {
+    "presto": "presto",
+    "bespokefit_qm": "BespokeFit (QM)",
+    "bespokefit_aimnet2_matched": "BespokeFit (AIMNet2)",
+}
 
 
 def _runs(method_dir: Path, filename: str) -> list[tuple[Path, dict[str, Any]]]:
@@ -185,6 +191,27 @@ def parity_table(parity_dir: Path) -> pd.DataFrame:
     return pd.DataFrame(rows).set_index("arm")
 
 
+def total_time_latex(summary: pd.DataFrame) -> str:
+    """Booktabs table of mean (± SD) total wall time in minutes for TABLE_METHODS."""
+    rows = []
+    for method, label in TABLE_METHODS.items():
+        mean, sd = summary.loc[method, ("total", ["mean", "std"])] / 60
+        time = f"{mean:.1f}" if np.isnan(sd) else f"{mean:.1f} $\\pm$ {sd:.1f}"
+        rows.append(f"{label} & {time} \\\\")
+    return "\n".join(
+        [
+            r"\begin{tabular}{lr}",
+            r"\toprule",
+            r"Method & Total Wall Time / min \\",
+            r"\midrule",
+            *rows,
+            r"\bottomrule",
+            r"\end{tabular}",
+            "",
+        ]
+    )
+
+
 def plot_phases(summary: pd.DataFrame, path: Path) -> None:
     """Left: total time per method (log scale). Right: fraction of time per phase."""
     fig, (ax_total, ax_frac) = plt.subplots(
@@ -224,8 +251,7 @@ def analyse_speed_comparison(root: Path) -> None:
     numeric = per_run.drop(columns="run").groupby("method")
     summary = numeric.agg(["mean", "std", "min", "max"])
     summary.to_csv(out / "summary.csv")
-    cols = ["total", "fit_essential_total", *PHASES]
-    summary.loc[:, (cols, ["mean", "std"])].round(1).to_latex(out / "summary.tex")
+    (out / "summary.tex").write_text(total_time_latex(summary))
     plot_phases(summary, out / "phases.png")
 
     presto_runs = [run for _, run in _runs(root / "presto", "timings.json")]
