@@ -42,8 +42,8 @@ PHASE_LABELS = {
 # Methods shown in the publication table, with their display names
 TABLE_METHODS = {
     "presto": "presto",
-    "bespokefit_qm": "BespokeFit (QM)",
     "bespokefit_aimnet2_matched": "BespokeFit (AIMNet2)",
+    "bespokefit_qm": "BespokeFit (B3LYP-D3(BJ)/DZVP)",
 }
 
 
@@ -100,18 +100,41 @@ def bespokefit_phases(run: dict[str, Any]) -> dict[str, float]:
     return phases
 
 
+def presto_mlip_s(run: dict[str, Any]) -> float:
+    """Time in MLIP evaluations while generating reference data (training data is
+    sampled with MM MD, then ML single points and ML restrained minimisations)."""
+    t = {path: row["total_s"] for path, row in run["summary"].items()}
+    sampling = "total/training_sampling"
+    return (
+        t[f"{sampling}/ml_single_points"]
+        + t[
+            f"{sampling}/torsion_minimisation/ml_restrained_minimisation/minimize_energy"
+        ]
+    )
+
+
 def compute_call_stats(run_dir: Path) -> dict[str, float]:
-    """Number and summed wall time of QC energy/gradient calls in all workers."""
-    calls = [
-        json.loads(line)
+    """Number and summed wall time of QC energy/gradient calls in all workers, and
+    the wall time during which at least one call was running (``reference_mlip``)."""
+    calls = sorted(
+        (c["start"], c["end"])
         for log in run_dir.glob("compute_calls/*.jsonl")
-        for line in log.read_text().splitlines()
-    ]
-    durations = np.array([c["end"] - c["start"] for c in calls])
+        for c in map(json.loads, log.read_text().splitlines())
+    )
+    durations = np.array([end - start for start, end in calls])
+    covered, cur_start, cur_end = 0.0, *calls[0]
+    for start, end in calls[1:]:
+        if start > cur_end:
+            covered += cur_end - cur_start
+            cur_start, cur_end = start, end
+        else:
+            cur_end = max(cur_end, end)
+    covered += cur_end - cur_start
     return {
+        "reference_mlip": covered,
         "n_qc_calls": len(calls),
         "qc_call_time_sum_s": float(durations.sum()),
-        "qc_call_time_mean_s": float(durations.mean()) if len(calls) else float("nan"),
+        "qc_call_time_mean_s": float(durations.mean()),
     }
 
 
@@ -126,7 +149,9 @@ def phase_table(root: Path) -> pd.DataFrame:
             row["total"] = sum(phases.values())
             row["fit_essential_total"] = row["total"] - phases["diagnostics"]
             row["startup"] = run["startup_s"]
-            if not is_presto:
+            if is_presto:
+                row["reference_mlip"] = presto_mlip_s(run)
+            else:
                 row.update(compute_call_stats(run_dir))
             rows.append(row)
     return pd.DataFrame(rows)
@@ -213,29 +238,31 @@ def total_time_latex(summary: pd.DataFrame) -> str:
 
 
 def plot_phases(summary: pd.DataFrame, path: Path) -> None:
-    """Left: total time per method (log scale). Right: fraction of time per phase."""
-    fig, (ax_total, ax_frac) = plt.subplots(
-        1, 2, figsize=(11, 0.6 * len(summary) + 1.5)
-    )
-    methods = summary.index
-    y = np.arange(len(methods))
+    """Fraction of wall time per phase for TABLE_METHODS, with reference data split into MLIP (or
+    QM, for BespokeFit (QM)) calls and everything else."""
+    mean = summary.xs("mean", axis=1, level=1).loc[list(TABLE_METHODS)]
+    mean["reference_other"] = mean["reference_data"] - mean["reference_mlip"]
+    labels = {
+        **PHASE_LABELS,
+        "reference_mlip": "Reference data: MLIP/QM calls",
+        "reference_other": "Reference data: other",
+    }
+    phases = [p for p in PHASES if p != "reference_data"]
+    i = phases.index("msm") + 1
+    phases[i:i] = ["reference_mlip", "reference_other"]
 
-    ax_total.barh(
-        y, summary[("total", "mean")], xerr=summary[("total", "std")], color="grey"
-    )
-    ax_total.set_xscale("log")
-    ax_total.set_xlim(left=1)  # bars start at 1 s rather than at the shortest one
-    ax_total.set_xlabel("Total wall time / s")
-    ax_total.set_yticks(y, methods)
-
-    left = np.zeros(len(methods))
-    for phase in PHASES:
-        frac = (summary[(phase, "mean")] / summary[("total", "mean")]).to_numpy()
-        ax_frac.barh(y, frac, left=left, label=PHASE_LABELS[phase])
+    fig, ax = plt.subplots(figsize=(8, 0.6 * len(mean) + 1.5))
+    y = np.arange(len(mean))
+    left = np.zeros(len(mean))
+    for phase in phases:
+        frac = (mean[phase] / mean["total"]).to_numpy()
+        ax.barh(y, frac, left=left, label=labels[phase])
         left += frac
-    ax_frac.set_xlabel("Fraction of wall time")
-    ax_frac.set_yticks(y, [])
-    ax_frac.legend(bbox_to_anchor=(1.02, 1), loc="upper left", fontsize="small")
+    ax.set_xlim(0, 1)
+    ax.set_xlabel("Fraction of wall time")
+    ax.set_yticks(y, [TABLE_METHODS[m] for m in mean.index])
+    ax.invert_yaxis()  # first method at the top
+    ax.legend(bbox_to_anchor=(1.02, 1), loc="upper left", fontsize="small")
     fig.tight_layout()
     fig.savefig(path, dpi=300, bbox_inches="tight")
     plt.close(fig)
