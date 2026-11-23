@@ -6,12 +6,14 @@ row per run, and an ``_agg`` version with mean/sd/min/max over repeats.
 """
 
 import json
+from io import BytesIO
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 from rdkit import Chem
-from rdkit.Chem import Descriptors
+from rdkit.Chem import Descriptors, Draw
 
 from convenience_functions._stats import rms
 from convenience_functions.presto_fitting_analysis import ITERATION_SPECS, _get_fit_stage_rmse
@@ -19,6 +21,12 @@ from convenience_functions.speed_comparison import presto_phases
 
 SAGE = "openff-2.3.0"
 SAGE_OFFXML = "input_ff/openff_unconstrained-2.3.0.offxml"
+_DISPLAY_NAMES = {"lipid": "Lipid Fragment", "tyk2": "TYK2", "folmsbee_flex": "Folmsbee Flexible"}
+
+
+def display_name(molecule: str) -> str:
+    """Molecule name for tables and plots, e.g. folmsbee_flex -> Folmsbee Flex."""
+    return _DISPLAY_NAMES.get(molecule, molecule.replace("_", " ").title())
 
 
 def _run_ids(ff: str) -> dict[str, str]:
@@ -83,7 +91,7 @@ def summarise_fit_robustness(root: Path, molecules_qm: dict[str, str], ffs: list
         if agg_values:
             agg = _agg(df, agg_values)
             agg.to_csv(out_dir / f"{name}_agg.csv", index=False)
-            agg.to_latex(out_dir / f"{name}_agg.tex", index=False, float_format="%.3f")
+            agg.assign(molecule=agg["molecule"].map(display_name)).to_latex(out_dir / f"{name}_agg.tex", index=False, float_format="%.3f")
 
     # QM accuracy, per run
     qm = []
@@ -114,7 +122,9 @@ def summarise_fit_robustness(root: Path, molecules_qm: dict[str, str], ffs: list
                 .mean()
                 .assign(**ids)
             )
-    write(pd.concat(spread, ignore_index=True), "parameter_spread")
+    spread_df = pd.concat(spread, ignore_index=True)
+    write(spread_df, "parameter_spread")
+    (out_dir / "parameter_spread.tex").write_text(parameter_spread_latex(spread_df))
     write(pd.concat(shift, ignore_index=True), "parameter_shift_from_initial")
 
     # Held-out energy/force error vs the MLP, and timings, per run
@@ -142,30 +152,71 @@ def summarise_fit_robustness(root: Path, molecules_qm: dict[str, str], ffs: list
     per_molecule.columns = [f"{c}_{s}" for c, s in per_molecule.columns]
     per_molecule = per_molecule.reset_index().merge(sizes, on="molecule")
     per_molecule.to_csv(out_dir / "timings_per_molecule.csv", index=False)
-    per_molecule.to_latex(out_dir / "timings_per_molecule.tex", index=False, float_format="%.0f")
+    per_molecule.assign(molecule=per_molecule["molecule"].map(display_name)).to_latex(out_dir / "timings_per_molecule.tex", index=False, float_format="%.0f")
 
-    _plot_qm_spread(qm_df, out_dir / "qm_accuracy_spread.png")
+    smiles = {m: (root / "input" / f"{m}.smi").read_text().strip() for m in molecules_qm}
+    _plot_qm_spread(qm_df, smiles, out_dir / "qm_accuracy_spread.png")
     _plot_time_vs_size(per_molecule, out_dir / "time_vs_size.png")
 
 
-def _plot_qm_spread(qm_df: pd.DataFrame, path: Path) -> None:
+def _reg_key(reg: str) -> int:
+    return int(reg.removeprefix("reg"))
+
+
+def parameter_spread_latex(spread: pd.DataFrame) -> str:
+    """Booktabs table of RMS normalised SD across repeat fits, per regularisation and
+    parameter type, for each molecule and pooled over all molecules."""
+    spread = spread.assign(
+        parameter=spread["valence_type"] + " " + spread["parameter_name"],
+        weighted_sq=spread["n_parameter_ids"] * spread["rms_normalised_std_dev"] ** 2,
+    )
+    keys = ["reg", "parameter"]
+    table = spread.pivot_table(index=keys, columns="molecule", values="rms_normalised_std_dev")
+    # Pool over molecules as if all their parameter IDs were in one RMS.
+    # shortcut: weights by n_parameter_ids, which also counts any near-zero-scale
+    # parameters excluded from each molecule's RMS (none expected for these terms).
+    pooled = spread.groupby(keys)[["weighted_sq", "n_parameter_ids"]].sum()
+    table["Overall"] = np.sqrt(pooled["weighted_sq"] / pooled["n_parameter_ids"])
+    table = table.sort_index(level="reg", key=lambda r: r.map(_reg_key), sort_remaining=False)
+    table.columns = [display_name(c) for c in table.columns]
+    table.index = table.index.set_names(["Regularisation", "Parameter"])
+    return table.to_latex(float_format="%.3f", multirow=True)
+
+
+def _draw_molecule(ax: plt.Axes, smiles: str) -> None:
+    image = Draw.MolToImage(Chem.MolFromSmiles(smiles), size=(500, 350))
+    buffer = BytesIO()
+    image.save(buffer, format="png")
+    buffer.seek(0)
+    ax.imshow(plt.imread(buffer))
+    ax.axis("off")
+
+
+def _plot_qm_spread(qm_df: pd.DataFrame, smiles: dict[str, str], path: Path) -> None:
+    """Per molecule: its 2D structure above the RMSE vs QM of every fit, by
+    regularisation, with Sage as a dashed line."""
     fits = qm_df[qm_df["reg"] != SAGE]
     molecules = list(fits["molecule"].unique())
-    regs = sorted(fits["reg"].unique(), key=lambda r: int(r.removeprefix("reg")))
-    fig, axes = plt.subplots(1, len(molecules), figsize=(3 * len(molecules), 3.5), squeeze=False)
-    for ax, molecule in zip(axes[0], molecules):
+    regs = sorted(fits["reg"].unique(), key=_reg_key)
+    fig, axes = plt.subplots(
+        2, len(molecules), figsize=(3 * len(molecules), 6),
+        gridspec_kw={"height_ratios": [1, 1.6]}, squeeze=False,
+    )
+    for ax_mol, ax, molecule in zip(axes[0], axes[1], molecules):
+        _draw_molecule(ax_mol, smiles[molecule])
         mol = fits[fits["molecule"] == molecule]
         for x, reg in enumerate(regs):
             y = mol[mol["reg"] == reg]["rmse"]
             ax.scatter([x] * len(y), y, alpha=0.7)
         sage = qm_df[(qm_df["molecule"] == molecule) & (qm_df["reg"] == SAGE)]["rmse"]
         ax.axhline(sage.iloc[0], ls="--", c="grey", label="Sage 2.3.0")
+        ax.set_ylim(bottom=0)
         ax.set_xticks(range(len(regs)), regs)
-        ax.set_title(molecule)
+        ax.set_title(display_name(molecule))
         ax.set_ylabel("RMSE vs QM / kcal mol$^{-1}$")
-    axes[0][0].legend()
+    axes[1][-1].legend(loc="center left", bbox_to_anchor=(1.02, 0.5))
     fig.tight_layout()
-    fig.savefig(path, dpi=600)
+    fig.savefig(path, dpi=600, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -176,7 +227,7 @@ def _plot_time_vs_size(per_molecule: pd.DataFrame, path: Path) -> None:
         yerr=per_molecule["wall_s_std"] / 60, fmt="o",
     )
     for _, row in per_molecule.iterrows():
-        ax.annotate(row["molecule"], (row["n_atoms"], row["wall_s_mean"] / 60), fontsize=7)
+        ax.annotate(display_name(row["molecule"]), (row["n_atoms"], row["wall_s_mean"] / 60), fontsize=7)
     ax.set_xlabel("Number of atoms")
     ax.set_ylabel("Wall time per fit / min")
     fig.tight_layout()
