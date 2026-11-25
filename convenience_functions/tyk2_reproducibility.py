@@ -258,6 +258,17 @@ def _compute_offxml_variability_summary(offxml_df: pd.DataFrame) -> pd.DataFrame
     return pd.DataFrame(summary_rows)
 
 
+# pint unit strings (as stored in the summary CSV) -> LaTeX. Unknown units raise a
+# KeyError rather than writing raw pint strings, whose underscores break LaTeX.
+_LATEX_UNITS = {
+    "angstrom": r"$\mathrm{\AA}$",
+    "radian": "radian",
+    "kilocalorie / mole": r"kilocalories mol$^{-1}$",
+    "kilocalories_per_mole / angstrom ** 2": r"kilocalories mol$^{-1}$ $\mathrm{\AA}^{-2}$",
+    "kilocalories_per_mole / radian ** 2": r"kilocalories mol$^{-1}$ radian$^{-2}$",
+}
+
+
 def _save_offxml_latex_table(summary_df: pd.DataFrame, output_path: Path) -> None:
     table_df = summary_df[
         [
@@ -278,6 +289,8 @@ def _save_offxml_latex_table(summary_df: pd.DataFrame, output_path: Path) -> Non
             "rms_std_dev": "RMS std dev",
         }
     )
+
+    table_df["Unit"] = table_df["Unit"].map(lambda u: _LATEX_UNITS[u])
 
     metric_columns = ["RMS normalised std dev", "RMS std dev"]
     for column in metric_columns:

@@ -94,7 +94,6 @@ descent = { git = "https://github.com/openforcefield/descent", rev = "15101d021d
 yammbs = { git = "https://github.com/fjclark/yammbs", rev = "ebe7e5eb61d9ea73e0f972fea4c3ff748b2515b3" }
 smirnoff-plugins = { git = "https://github.com/fjclark/smirnoff-plugins", rev = "fd4e8e71a0a2c710d662f6001cabc802a5097cf6" }
 deepchem = { version = ">=2.7.0", extras = ["jax"] } # Interferes with pytorch if ["torch"]
-# AIMNet Stuff
 
 [tool.pixi.feature.presto-default.pypi-dependencies]
 presto = { git = "https://github.com/cole-group/presto.git", rev = "377a6383b5a28a586d5bd728a76eacc4cd1a40b5" }
@@ -137,12 +136,51 @@ cached-path = { git = "https://github.com/fjclark/cached_path.git", rev = "1cb8b
 cinnabar = { git = "https://github.com/OpenFreeEnergy/cinnabar.git", rev = "fb486eb5fd058b8963182342421f503da2808bfa" }
 
 
+# OpenFF BespokeFit 0.4.4 for the speed comparison. Kept separate from `common` as
+# bespokefit needs pydantic 1. psi4 conflicts with the pinned ML stack, so the QM
+# and ML variants get separate envs sharing the same bespokefit core.
+[tool.pixi.feature.bespokefit.dependencies]
+python = "3.11.*"  # forcebalance 1.9.6 has no py3.12 build
+openff-bespokefit = "==0.4.4"
+# fastapi >=0.112 starts the bespokefit coordinator loop once per router level (3x);
+# the racing loops crash the gateway with a redis DataError
+fastapi = "<0.112"
+qcengine = ">=0.33"
+openff-forcefields = ">=2025"
+ambertools = "*"
+openeye-toolkits = ">=2025.2.1,<2026"
+
+[tool.pixi.feature.bespokefit-psi4.dependencies]
+psi4 = "==1.10.2"
+einsums = "==1.1.3"  # 1.1.6 lacks a symbol psi4 1.10.2 needs
+libxc-c = "==7.0.0"  # psi4 1.10.2 fails to import with 7.1
+dftd3-python = "*"  # D3BJ dispersion for B3LYP-D3BJ
+
+# Exact AIMNet2 stack shared by `default` and `bespokefit-ml`, so the matched
+# bespokefit variant runs AIMNet2 exactly as presto does. A solve group can't
+# enforce this: bespokefit 0.4.4 needs python 3.11 and pydantic 1.
+[tool.pixi.feature.aimnet2-stack.dependencies]
+pytorch-gpu = "==2.8.0"
+cuda-version = "==12.9"
+openmm = "==8.5.0"
+openmm-ml = "==1.6"
+warp-lang = "==1.12.0"
+
+[tool.pixi.feature.aimnet2-stack.pypi-dependencies]
+aimnet = "==0.1.0"
+nvalchemi-toolkit-ops = "==0.2.0"
+
+[tool.pixi.feature.bespokefit-ml.pypi-dependencies]
+pyaimnet2 = { git = "https://github.com/jthorton/AIMNet2.git", rev = "1a2da01fbb66a6627473a76888fe4a3cb06645cd" }
+
 [tool.pixi.environments]
-default = {features = ["common", "standard", "openmm-current", "garnet", "presto-default", "openeye", "orb", "cinnabar"]}
+default = {features = ["common", "standard", "openmm-current", "aimnet2-stack", "garnet", "presto-default", "openeye", "orb", "cinnabar"]}
 default-save-ff-trajectory = {features = ["common", "standard", "openmm-current", "garnet", "presto-save-ff-trajectory", "openeye", "cinnabar"]}
 espaloma = {features = ["common", "espaloma", "presto-default", "openeye", "cinnabar"]}
 no-openeye = {features = ["common", "standard", "openmm-current", "garnet", "presto-default", "cinnabar"]}
 presto051 = {features = ["common", "standard", "openmm-84", "presto-051", "openeye", "cinnabar"]}
+bespokefit-ml = {features = ["bespokefit", "aimnet2-stack", "bespokefit-ml"]}
+bespokefit-qm = {features = ["bespokefit", "bespokefit-psi4"]}
 
 [tool.setuptools.package-dir]
 "presto_benchmark" = "convenience_functions"
@@ -164,6 +202,13 @@ build-backend = "setuptools.build_meta"
 # regenerates from the combined force fields. Extra args are appended, e.g.
 # `pixi run snakemake-no-refit -n`.
 snakemake-no-refit = { cmd = "snakemake --config skip_fits=True --cores all" }
+# presto vs BespokeFit speed comparison (expensive; QM can take days). Uses all 32
+# cores per job so nothing runs alongside a timed fit.
+snakemake-speed = { cmd = "snakemake --cores 32 benchmarking/speed_comparison/analysis/summary.csv" }
+# Fit robustness study (~45 h of fits + analysis on one GPU; see README). All fits,
+# then the analysis of whichever fits finished: `;` not `&&`, so the analysis still
+# runs if a fit failed.
+snakemake-robustness = { cmd = "snakemake robustness_fits --cores all; snakemake benchmarking/fit_robustness/analysis/summary/qm_accuracy.csv robustness_torsion_reports --cores all --resources exclusive=1 --config robustness_existing_only=True" }
 pre-commit = { cmd = "pre-commit run --all-files" }
 lint = { cmd = "ruff check convenience_functions" }
 format = { cmd = "ruff format convenience_functions && ruff check --fix --select I convenience_functions" }

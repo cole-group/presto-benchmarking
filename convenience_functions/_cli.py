@@ -28,6 +28,45 @@ def run_presto_cli(
     )
 
 
+@app.command("run-presto-timed")
+def run_presto_timed_cli(
+    config_path: Path = typer.Argument(..., help="Path to PRESTO config file"),
+    smiles_path: Path = typer.Argument(..., help="Path to SMILES input file"),
+    output_dir: Path = typer.Argument(..., help="Output directory for force field"),
+    timings_path: Path = typer.Argument(..., help="Output JSON of per-stage timings"),
+) -> None:
+    """Run PRESTO with every stage of the fit timed."""
+    from convenience_functions.presto_timing import run_presto_timed
+
+    run_presto_timed(config_path, smiles_path, output_dir, timings_path)
+
+
+@app.command("aimnet2-parity-presto")
+def aimnet2_parity_presto_cli(
+    smiles: str = typer.Argument(..., help="SMILES of the test molecule"),
+    conformers_sdf: Path = typer.Argument(..., help="Conformer SDF (made if absent)"),
+    out_json: Path = typer.Argument(..., help="Energies, forces and call times"),
+    n_conformers: int = typer.Option(20, help="Number of conformers"),
+    n_calls_per_conformer: int = typer.Option(5, help="Timed calls per conformer"),
+) -> None:
+    """Time AIMNet2 energy+force calls through presto's own code path."""
+    from convenience_functions.aimnet2_parity_presto import aimnet2_parity_presto
+
+    aimnet2_parity_presto(
+        smiles, n_conformers, n_calls_per_conformer, conformers_sdf, out_json
+    )
+
+
+@app.command("analyse-speed-comparison")
+def analyse_speed_comparison_cli(
+    root: Path = typer.Argument(..., help="benchmarking/speed_comparison directory"),
+) -> None:
+    """Summarise presto vs BespokeFit timings into tables and plots."""
+    from convenience_functions.speed_comparison import analyse_speed_comparison
+
+    analyse_speed_comparison(root)
+
+
 @app.command("combine-force-fields")
 def combine_force_fields_cli(
     output_file: Path = typer.Argument(..., help="Path to output combined force field"),
@@ -271,6 +310,11 @@ def analyse_folmsbee_cli(
             "fields without the fitting stage)"
         ),
     ),
+    skip_detailed_analysis: bool = typer.Option(
+        False,
+        "--skip-detailed-analysis",
+        help="Only write results/stats CSVs (no paper-method comparison plots)",
+    ),
 ) -> None:
     """Analyse Folmsbee conformer energies with restrained minimization."""
     from convenience_functions.analyse_folmsbee import analyse_folmsbee
@@ -293,6 +337,7 @@ def analyse_folmsbee_cli(
         min_conformers_per_molecule=min_conformers_per_molecule,
         min_reference_energy_window=min_reference_energy_window,
         molecule_roster_smiles_dir=smiles_dir,
+        skip_detailed_analysis=skip_detailed_analysis,
     )
 
 
@@ -768,6 +813,20 @@ def analyse_tyk2_reproducibility_cli(
         sample_every_n_epochs=sample_every_n_epochs,
         run_ids=run_ids or None,
     )
+
+
+@app.command("summarise-fit-robustness")
+def summarise_fit_robustness_cli(
+    root: Path = typer.Argument(..., help="benchmarking/fit_robustness"),
+    molecules_qm: str = typer.Argument(..., help='JSON {molecule: "torsion"|"folmsbee"|"none"}'),
+    force_fields: list[str] = typer.Argument(..., help="Fitted bespoke_force_field.offxml paths"),
+) -> None:
+    """Summarise QM accuracy, parameter spread, MLP error and timings of repeat fits."""
+    import json
+
+    from convenience_functions.fit_robustness import summarise_fit_robustness
+
+    summarise_fit_robustness(root, json.loads(molecules_qm), force_fields)
 
 
 @app.command("analyse-rbfe")

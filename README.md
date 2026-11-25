@@ -33,9 +33,10 @@ pixi run snakemake --cores all benchmarking/tnet500/analysis/test/default/metric
 | **SI** Dataset descriptor statistics | `benchmarking/analysis/smiles_descriptors/smiles_descriptor_aggregate_mean_std.{csv,tex}` |
 | **SI** presto validation per-atom energy RMSEs | `benchmarking/analysis/presto_fit_validation/presto_fit_validation_error_aggregate.{csv,tex}` |
 | **SI** TorsionNet500 with B3LYP-D3(BJ)/DZVP reference | `benchmarking/tnet500_reopt_v4/analysis/test/default/metrics.json` and `.../validation/ablations/metrics.json` |
-| **SI** Fit reproducibility / parameter convergence (TYK2) | `benchmarking/tyk2_reproducibility/analysis/parameter_variability/offxml_variability_summary.tex` |
+| **SI** Fit robustness: repeats × regularisation strength, with timings (6 molecules; not in `rule all`; see below) | `benchmarking/fit_robustness/analysis/summary/qm_accuracy.csv` |
 | **SI** Folmsbee phosphate/sulfonamide rerun (no MSM/MLP-min) | `benchmarking/folmsbee_conformers/analysis/phosphate_sulphonamide/aimnet2_no_msm_no_min/aggregate_stats.csv` |
 | **SI** TYK2 cyclopropanecarboxamide edge torsion scans | `benchmarking/tyk2_cyclopropyl_edges_torsions/analysis/metrics.json` |
+| Speed: presto vs OpenFF BespokeFit (not in `rule all`; see below) | `benchmarking/speed_comparison/analysis/summary.csv` |
 
 ### Reproducing the analyses without rerunning the fits
 
@@ -48,6 +49,35 @@ This sets `--config skip_fits=True`, which makes `create_combined_force_field` a
 The Folmsbee analyses use the raw fits only to list which molecules were fit; with `skip_fits` that molecule set is taken from the committed input SMILES instead, so they reproduce from the combined force field alone (a GPU is still needed for the AIMNet2 single points).
 
 Three results genuinely depend on the raw per-molecule fits (loss curves, per-atom energies, fit trajectories), so `skip_fits` drops them from the default target and leaves their committed summary outputs in place: the **SI presto validation per-atom energy RMSEs**, **SI fit reproducibility** (TYK2), and the **congeneric-series retrain** analysis. Recomputing those requires the full fitting stage.
+
+### Speed comparison: presto vs OpenFF BespokeFit
+
+`pixi run snakemake-speed` times fits of one TYK2 ligand (`workflow_config.yaml: speed_comparison`) with:
+
+| Method | AIMNet2 / QM | Repeats |
+| --- | --- | --- |
+| `presto` | AIMNet2 via openmm-ml, GPU (`configs/aimnet2_openff221.yaml`) | 5 (+ warm-up, + 2 without timing hooks, to measure their overhead) |
+| `bespokefit_aimnet2_matched` | BespokeFit 0.4.4 with AIMNet2 run exactly as in presto (same openmm-ml/aimnet/torch versions and model, GPU) via `convenience_functions/standalone/openmm_ml_harness.py` | 3 (+ warm-up) |
+| `bespokefit_aimnet2_stock` | BespokeFit 0.4.4 with QCEngine's own AIMNet2 harness (pyaimnet2 4-model ensemble, fp64, CPU) | 3 (+ warm-up) |
+| `bespokefit_qm` | BespokeFit 0.4.4, psi4 B3LYP-D3BJ/DZVP | 1 |
+
+This rule is expensive (the QM especially) and runs everything serially on one machine, so it is not part of `rule all`.
+- **presto** is timed stage by stage by wrapping presto's functions (`convenience_functions/presto_timing.py`), without changing what they do.
+- **BespokeFit** is timed per executor stage, plus every QC energy/gradient call (`convenience_functions/standalone/run_bespokefit_timed.py`). Stage times are accurate to about 5 s, the coordinator's update interval.
+
+`rule aimnet2_parity` checks that the AIMNet2 evaluations really match between environments, and compares their per-call cost.
+
+Caveats:
+- BespokeFit 0.4.4 needs pydantic 1, so it gets its own envs (`bespokefit-ml`, `bespokefit-qm`) and cannot load `openff_unconstrained-2.3.0` (that needs openff-toolkit >= 0.17). Both methods therefore start from `openff_unconstrained-2.2.1`, with OpenEye AM1-BCC charges.
+- BespokeFit fits torsions only. presto also fits bonds, angles and impropers.
+
+### Fit robustness: repeats × regularisation
+
+`pixi run snakemake-robustness` (defined in `pyproject.toml`) repeats presto fits (`configs/aimnet2.yaml`, `default-save-ff-trajectory` env, which also saves per-epoch parameters) of six molecules, listed under `fit_robustness` in `workflow_config.yaml`. The six are the neutral TYK2 ligand, an anion, a cation, a neutral fragment, a flexible anionic lipid, and a flexible Folmsbee molecule. Each is fitted at three torsion regularisation strengths: none (`aimnet2_reg0`, 5 repeats), default (`aimnet2`, 10 repeats) and 10× (`aimnet2_reg10`, 5 repeats). Every fit is timed as in the speed comparison.
+
+Each fit is scored against the molecule's own QM data: QCArchive torsion drives, or Folmsbee DLPNO conformer energies (the full TYK2 ligand has none). Also reported are how much parameters spread and shift and the timings (`benchmarking/fit_robustness/analysis/summary/`).
+
+The study runs about 45 h on one GPU (about 44 h of fits, 1 h of analysis), one fit at a time (as it was used to get timings on a single machine with nothing else running), so it is not part of the cluster workflow. Check that nothing else is using the GPU during the run (e.g. with `nvidia-smi`), or the timings are not comparable. Repeats differ only through MD/metadynamics noise, since every repeat starts from the same conformers.
 
 ### Requirements and notes
 
@@ -90,7 +120,7 @@ pixi run snakemake
 
 ### Changing the queue/partition for the fitting jobs
 
-The GPU fitting rules (`run_presto`, and likewise `run_tyk2_reproducibility`, `run_tyk2_congeneric_series`, `run_tyk2_congeneric_series_retrain`, `run_1mer_backbone_joint_fit`) hard-code their SLURM partition and GPU request in a `resources:` block, e.g. in the `Snakefile`:
+The GPU fitting rules (`run_presto`, and likewise `run_tyk2_congeneric_series`, `run_tyk2_congeneric_series_retrain`, `run_1mer_backbone_joint_fit`) hard-code their SLURM partition and GPU request in a `resources:` block, e.g. in the `Snakefile`:
 ```python
 rule run_presto:
     ...
