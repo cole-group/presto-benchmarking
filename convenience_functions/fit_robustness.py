@@ -18,6 +18,7 @@ from rdkit.Chem import Descriptors, Draw
 from convenience_functions._stats import rms
 from convenience_functions.presto_fitting_analysis import ITERATION_SPECS, _get_fit_stage_rmse
 from convenience_functions.speed_comparison import presto_phases
+from convenience_functions.tyk2_reproducibility import _LATEX_UNITS, _OFFXML_PARAM_KEYS
 
 SAGE = "openff-2.3.0"
 SAGE_OFFXML = "input_ff/openff_unconstrained-2.3.0.offxml"
@@ -70,6 +71,52 @@ def run_timings(run_dir: Path) -> dict[str, float]:
     return {"wall_s": wall, "startup_s": run["startup_s"], **presto_phases(run)}
 
 
+# Validation data source and level of theory, by molecule (TYK2 has none)
+_TORSION_LOT = "B3LYP-D3(BJ)/DZVP"
+_JACS = "OpenFF-benchmark-ligand-fragments-v2.0"
+_VALIDATION_SOURCES = {
+    "lipid": ("OpenFF Lipid Torsion Drives v4.0", _TORSION_LOT),
+    "anion": (_JACS, _TORSION_LOT),
+    "cation": (_JACS, _TORSION_LOT),
+    "neutral_fragment": (_JACS, _TORSION_LOT),
+    "folmsbee_flex": (
+        "Folmsbee and Hutchison (astex\\_1uml)",
+        "DLPNO-CCSD(T)/cc-pVTZ//B3LYP-D3(BJ)",
+    ),
+}
+
+
+def molecules_table(root: Path, molecules_qm: dict[str, str], sizes: pd.DataFrame) -> pd.DataFrame:
+    """Each molecule's SMILES, net charge, atom count and the source, amount
+    and level of theory of its validation data, formatted for LaTeX."""
+    analysis = root / "analysis"
+    rows = []
+    for molecule, kind in molecules_qm.items():
+        size = sizes.set_index("molecule").loc[molecule]
+        if kind == "torsion":
+            n = len(json.loads((root / "input" / f"{molecule}.json").read_text())["qm_torsions"])
+            data = f"{n} torsion drives"
+        elif kind == "folmsbee":
+            stats = pd.read_csv(analysis / molecule / "folmsbee" / "per_molecule_stats.csv")
+            data = f"{stats['n_conformers'].iloc[0]} conformer energies"
+        else:
+            data = "--"
+        source, lot = _VALIDATION_SOURCES.get(molecule, ("--", "--"))
+        smiles = (root / "input" / f"{molecule}.smi").read_text().strip()
+        rows.append(
+            {
+                "Molecule": display_name(molecule),
+                "SMILES": r"\texttt{" + smiles.replace("#", r"\#").replace("%", r"\%") + "}",
+                "Net charge": f"${size['formal_charge']:+d}$" if size["formal_charge"] else "0",
+                "N atoms": size["n_atoms"],
+                "Validation source": source,
+                "Validation data": data,
+                "Level of theory": lot,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
 def molecule_size(smiles: str) -> dict[str, int]:
     mol = Chem.MolFromSmiles(smiles)
     return {
@@ -109,11 +156,11 @@ def summarise_fit_robustness(root: Path, molecules_qm: dict[str, str], ffs: list
     write(qm_df, "qm_accuracy", ["rmse"])
 
     # Parameter spread across repeats, and how far torsion k's moved from the start
-    spread, shift = [], []
+    final_values, shift = [], []
     for molecule in molecules_qm:
         for reg_dir in sorted((analysis / molecule / "parameters").iterdir()):
             ids = {"molecule": molecule, "reg": reg_dir.name}
-            spread.append(pd.read_csv(reg_dir / "offxml_variability_summary.csv").assign(**ids))
+            final_values.append(pd.read_csv(reg_dir / "offxml_parameter_values.csv").assign(**ids))
             traj = pd.read_csv(reg_dir / "tensor_parameter_trajectories.csv")
             final = traj[traj["global_epoch"] == traj.groupby("run_id")["global_epoch"].transform("max")]
             shift.append(
@@ -122,7 +169,7 @@ def summarise_fit_robustness(root: Path, molecules_qm: dict[str, str], ffs: list
                 .mean()
                 .assign(**ids)
             )
-    spread_df = pd.concat(spread, ignore_index=True)
+    spread_df = parameter_spread(pd.concat(final_values, ignore_index=True))
     write(spread_df, "parameter_spread")
     (out_dir / "parameter_spread.tex").write_text(parameter_spread_latex(spread_df))
     write(pd.concat(shift, ignore_index=True), "parameter_shift_from_initial")
@@ -156,6 +203,13 @@ def summarise_fit_robustness(root: Path, molecules_qm: dict[str, str], ffs: list
 
     smiles = {m: (root / "input" / f"{m}.smi").read_text().strip() for m in molecules_qm}
     _plot_qm_spread(qm_df, smiles, out_dir / "qm_accuracy_spread.png")
+    molecules = molecules_table(root, molecules_qm, sizes)
+    molecules.to_latex(out_dir / "molecules.tex", index=False)
+    wall = per_molecule.set_index("molecule").loc[list(molecules_qm)]
+    brief = molecules[["Molecule", "SMILES", "Net charge", "N atoms"]].assign(
+        **{"Wall time / s": [f"${m:.0f} \\pm {s:.0f}$" for m, s in zip(wall["wall_s_mean"], wall["wall_s_std"])]}
+    )
+    brief.sort_values("N atoms", kind="stable").to_latex(out_dir / "molecules_brief.tex", index=False)
     _plot_time_vs_size(per_molecule, out_dir / "time_vs_size.png")
 
 
@@ -163,24 +217,99 @@ def _reg_key(reg: str) -> int:
     return int(reg.removeprefix("reg"))
 
 
-def parameter_spread_latex(spread: pd.DataFrame) -> str:
-    """Booktabs table of RMS normalised SD across repeat fits, per regularisation and
-    parameter type, for each molecule and pooled over all molecules."""
-    spread = spread.assign(
-        parameter=spread["valence_type"] + " " + spread["parameter_name"],
-        weighted_sq=spread["n_parameter_ids"] * spread["rms_normalised_std_dev"] ** 2,
+def sage_scales() -> pd.Series:
+    """Mean |value| of each parameter term over all of Sage 2.3.0, in the units of
+    the bespoke OFFXML values. Proper torsion terms are matched by periodicity, as
+    presto's k1-k4 have periodicities 1-4."""
+    from openff.toolkit import ForceField
+
+    ff = ForceField(SAGE_OFFXML)
+    units = {"Bonds": ("kcal/mol/angstrom**2", "angstrom"), "Angles": ("kcal/mol/radian**2", "radian")}
+    values: dict[tuple[str, str], list[float]] = {}
+    for handler, names in _OFFXML_PARAM_KEYS.items():
+        for param in ff.get_parameter_handler(handler).parameters:
+            if handler in units:
+                terms = [(n, getattr(param, n).m_as(u)) for n, u in zip(names, units[handler])]
+            elif handler == "ProperTorsions":
+                terms = [(f"k{n}", k.m_as("kcal/mol")) for n, k in zip(param.periodicity, param.k)]
+            else:  # impropers: presto's single k1 has periodicity 2, as in Sage
+                terms = [(f"k{i}", k.m_as("kcal/mol")) for i, k in enumerate(param.k, 1)]
+            for name, value in terms:
+                values.setdefault((handler, name), []).append(abs(value))
+    return pd.Series(
+        {key: float(np.mean(values[key])) for key in values if key[1] in _OFFXML_PARAM_KEYS[key[0]]},
+        name="sage_mean_abs",
+    ).rename_axis(["valence_type", "parameter_name"])
+
+
+def parameter_spread(final: pd.DataFrame) -> pd.DataFrame:
+    """RMS over parameter IDs of each ID's SD of final values across repeat fits, raw and
+    normalised, per molecule (and pooled over molecules) and regularisation.
+
+    The normaliser is the mean |value| of that parameter term over all of Sage 2.3.0
+    (``sage_scales``), so it is the same for every molecule and regularisation
+    strength, and near-zero parameters can't dominate."""
+    keys = ["valence_type", "parameter_name", "unit"]
+    sd = (
+        final.groupby(["molecule", "reg", *keys, "parameter_id"])["value"]
+        .agg(lambda v: float(np.std(v, ddof=0)))
+        .rename("std_dev")
+        .reset_index()
+        .join(sage_scales(), on=["valence_type", "parameter_name"])
     )
-    keys = ["reg", "parameter"]
-    table = spread.pivot_table(index=keys, columns="molecule", values="rms_normalised_std_dev")
-    # Pool over molecules as if all their parameter IDs were in one RMS.
-    # shortcut: weights by n_parameter_ids, which also counts any near-zero-scale
-    # parameters excluded from each molecule's RMS (none expected for these terms).
-    pooled = spread.groupby(keys)[["weighted_sq", "n_parameter_ids"]].sum()
-    table["Overall"] = np.sqrt(pooled["weighted_sq"] / pooled["n_parameter_ids"])
-    table = table.sort_index(level="reg", key=lambda r: r.map(_reg_key), sort_remaining=False)
-    table.columns = [display_name(c) for c in table.columns]
-    table.index = table.index.set_names(["Regularisation", "Parameter"])
-    return table.to_latex(float_format="%.3f", multirow=True)
+    sd["normalised_std_dev"] = sd["std_dev"] / sd["sage_mean_abs"]
+    sd = pd.concat([sd, sd.assign(molecule="Overall")], ignore_index=True)
+    return (
+        sd.groupby(["molecule", "reg", *keys, "sage_mean_abs"])[["normalised_std_dev", "std_dev"]]
+        .agg(lambda v: float(np.sqrt(np.mean(np.square(v)))))
+        .add_prefix("rms_")
+        .reset_index()
+    )
+
+
+def parameter_spread_latex(rows: pd.DataFrame) -> str:
+    """Booktabs table of ``parameter_spread`` output, molecules by rows and
+    regularisation strengths by columns."""
+    metrics = {"rms_normalised_std_dev": "RMS normalised std dev", "rms_std_dev": "RMS std dev"}
+    keys = ["valence_type", "parameter_name", "unit"]
+    table = rows.pivot_table(index=["molecule", *keys], columns="reg", values=list(metrics))
+    table = table.swaplevel(axis=1)[
+        [(reg, m) for reg in sorted(rows["reg"].unique(), key=_reg_key) for m in metrics]
+    ]
+    table.columns = table.columns.set_names([None, None])
+    table = table.rename(columns=metrics, level=1)
+    # Molecules alphabetically then Overall; parameters in _OFFXML_PARAM_KEYS order
+    molecules = [m for m in sorted(rows["molecule"].unique()) if m != "Overall"] + ["Overall"]
+    order = {(v, n): i for i, (v, n) in enumerate(
+        (v, n) for v, names in _OFFXML_PARAM_KEYS.items() for n in names
+    )}
+    table = table.iloc[
+        sorted(
+            range(len(table)),
+            key=lambda i: (molecules.index(table.index[i][0]), order[table.index[i][1:3]]),
+        )
+    ]
+    table = table.rename(index=lambda m: m if m == "Overall" else display_name(m), level=0)
+    table = table.rename(index=_LATEX_UNITS, level="unit")
+    # Label torsion k's by periodicity: presto's improper k1 has periodicity 2
+    table.index = pd.MultiIndex.from_tuples(
+        [
+            (m, v, "k2" if (v, p) == ("ImproperTorsions", "k1") else p, u)
+            for m, v, p, u in table.index
+        ]
+    )
+    table.index = table.index.set_names(["Molecule", "Valence", "Parameter", "Unit"])
+    latex = table.to_latex(
+        float_format="%.2f", multirow=True, multicolumn=True, multicolumn_format="c"
+    )
+    # pandas rules off every multirow group; keep one \midrule between molecules
+    lines = [
+        r"\midrule" if line.startswith(r"\cline{1-") else line
+        for line in latex.splitlines()
+        if not line.startswith(r"\cline{") or line.startswith(r"\cline{1-")
+    ]
+    lines.pop(-3)  # the \midrule just before \bottomrule
+    return "\n".join(lines) + "\n"
 
 
 def _draw_molecule(ax: plt.Axes, smiles: str) -> None:
