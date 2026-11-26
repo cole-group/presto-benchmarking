@@ -9,7 +9,7 @@ parameterisation_settings:
     initial_force_field: openff_unconstrained-2.3.0.offxml
     expand_torsions: true
     linearise_harmonics: true
-    msm_settings: {}
+    msm_settings: null
     type_generation_settings:
         Bonds:
             max_extend_distance: -1
