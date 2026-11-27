@@ -121,21 +121,34 @@ folmsbee_analysis:
       subset_max_molecules: 100
       subset_selection_strategy: "random"
       subset_seed: 0
-    phosphate_sulphonamide:
-      # Mirror of the "test" set but restricted to the molecules screened out
-      # by the global folmsbee_analysis.exclude_smarts filters (phosphates and
-      # sulphonamides). include_smarts overrides the global exclude_smarts so
-      # only matching molecules survive, and exclude_smarts is cleared.
+    phosphate:
+      # Phosphorus-containing molecules screened out by the global
+      # folmsbee_analysis.exclude_smarts filters, fitted without MSM or MLP
+      # minimisation. include_smarts overrides the global exclude_smarts.
       extra_force_fields:
         - "input_ff/openff_unconstrained-2.3.0.offxml"
         - "input_ff/esp04.offxml"
       include_smarts:
         - "[#15]"
-        - "[SX4](=[OX1])(=[OX1])[NX3]"
-        - "[SX4](=[OX1])(=[OX1])[NX2]"
       exclude_smarts: []
       min_reference_energy_window: 0.0
-      # Effectively unlimited — keep every matching molecule
+      # Effectively unlimited, keep every matching molecule
+      subset_max_molecules: 100000
+      subset_selection_strategy: "name"
+      subset_seed: 0
+    sulphonamide:
+      # Sulphonamides screened out by the global folmsbee_analysis.exclude_smarts
+      # filters (none also contain phosphorus), fitted without MSM but with MLP
+      # minimisation. include_smarts overrides the global exclude_smarts.
+      extra_force_fields:
+        - "input_ff/openff_unconstrained-2.3.0.offxml"
+        - "input_ff/esp04.offxml"
+      include_smarts:
+        - "[SX4](=[OX1])(=[OX1])[NX3]"
+        - "[SX4](=[OX1])(=[OX1])[NX2]"
+      exclude_smarts:
+        - "[#15]"
+      min_reference_energy_window: 0.0
       subset_max_molecules: 100000
       subset_selection_strategy: "name"
       subset_seed: 0

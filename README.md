@@ -34,7 +34,8 @@ pixi run snakemake --cores all benchmarking/tnet500/analysis/test/default/metric
 | **SI** presto validation per-atom energy RMSEs | `benchmarking/analysis/presto_fit_validation/presto_fit_validation_error_aggregate.{csv,tex}` |
 | **SI** TorsionNet500 with B3LYP-D3(BJ)/DZVP reference | `benchmarking/tnet500_reopt_v4/analysis/test/default/metrics.json` and `.../validation/ablations/metrics.json` |
 | **SI** Fit robustness: repeats × regularisation strength, with timings (6 molecules; not in `rule all`; see below) | `benchmarking/fit_robustness/analysis/summary/qm_accuracy.csv` |
-| **SI** Folmsbee phosphate/sulfonamide rerun (no MSM/MLP-min) | `benchmarking/folmsbee_conformers/analysis/phosphate_sulphonamide/aimnet2_no_msm_no_min/aggregate_stats.csv` |
+| **SI** Folmsbee phosphorus compounds rerun (no MSM, no MLP min) | `benchmarking/folmsbee_conformers/analysis/phosphate/aimnet2_no_msm_no_min/aggregate_stats.csv` |
+| **SI** Folmsbee sulfonamides rerun (no MSM, with MLP min) | `benchmarking/folmsbee_conformers/analysis/sulphonamide/aimnet2_no_msm/aggregate_stats.csv` |
 | **SI** TYK2 cyclopropanecarboxamide edge torsion scans | `benchmarking/tyk2_cyclopropyl_edges_torsions/analysis/metrics.json` |
 | Speed: presto vs OpenFF BespokeFit (not in `rule all`; see below) | `benchmarking/speed_comparison/analysis/summary.csv` |
 

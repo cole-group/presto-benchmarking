@@ -303,8 +303,10 @@ rule all:
         # TorsionNet500 results with B3LYP-D3(BJ)/DZVP reference (reoptimised v4)
         "benchmarking/tnet500_reopt_v4/analysis/test/default/metrics.json",
         "benchmarking/tnet500_reopt_v4/analysis/validation/ablations/metrics.json",
-        # Folmsbee phosphate/sulfonamide rerun without MSM and MLP minimisation
-        "benchmarking/folmsbee_conformers/analysis/phosphate_sulphonamide/aimnet2_no_msm_no_min/aggregate_stats.csv",
+        # Folmsbee phosphorus compounds without MSM or MLP minimisation, and
+        # sulphonamides without MSM but with MLP minimisation
+        "benchmarking/folmsbee_conformers/analysis/phosphate/aimnet2_no_msm_no_min/aggregate_stats.csv",
+        "benchmarking/folmsbee_conformers/analysis/sulphonamide/aimnet2_no_msm/aggregate_stats.csv",
         # TYK2 cyclopropanecarboxamide edge torsion scans
         "benchmarking/tyk2_cyclopropyl_edges_torsions/analysis/metrics.json",
         # Results needing the raw fits (dropped with --config skip_fits=True)
