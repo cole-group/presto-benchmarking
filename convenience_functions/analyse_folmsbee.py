@@ -2133,8 +2133,10 @@ def analyse_folmsbee(
     ]
     missing_required = [m for m in _SUMMARY_METHOD_ORDER if m not in detailed_method_order]
     if missing_required:
-        raise ValueError(
-            "Missing required methods for detailed analysis: "
+        # e.g. ANI-2x has no parameters for phosphorus, so a phosphorus-only
+        # subset has no ANI-2x energies at all
+        logger.warning(
+            "No results for methods, excluding them from the detailed analysis: "
             + ", ".join(missing_required)
         )
 

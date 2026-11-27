@@ -203,7 +203,8 @@ benchmarking/**/conformer-benchmark/
 !benchmarking/tnet500/output/test/default/combined_force_field.offxml
 !benchmarking/jacs_fragments/output/test/default/combined_force_field.offxml
 !benchmarking/folmsbee_conformers/output/test/aimnet2/combined_force_field.offxml
-!benchmarking/folmsbee_conformers/output/phosphate_sulphonamide/aimnet2_no_msm_no_min/combined_force_field.offxml
+!benchmarking/folmsbee_conformers/output/phosphate/aimnet2_no_msm_no_min/combined_force_field.offxml
+!benchmarking/folmsbee_conformers/output/sulphonamide/aimnet2_no_msm/combined_force_field.offxml
 
 # --- Key, lightweight analysis outputs (source data for paper tables/figures) ---
 !benchmarking/tnet500/analysis/test/default/metrics.json
@@ -213,7 +214,8 @@ benchmarking/**/conformer-benchmark/
 !benchmarking/jacs_fragments/analysis/test/default/metrics.json
 !benchmarking/tyk2_cyclopropyl_edges_torsions/analysis/metrics.json
 !benchmarking/folmsbee_conformers/analysis/test/aimnet2/aggregate_stats.csv
-!benchmarking/folmsbee_conformers/analysis/phosphate_sulphonamide/aimnet2_no_msm_no_min/aggregate_stats.csv
+!benchmarking/folmsbee_conformers/analysis/phosphate/aimnet2_no_msm_no_min/aggregate_stats.csv
+!benchmarking/folmsbee_conformers/analysis/sulphonamide/aimnet2_no_msm/aggregate_stats.csv
 !benchmarking/tyk2_congeneric_series/analysis/retrain_error_summary.csv
 !benchmarking/tyk2_reproducibility/analysis/parameter_variability/offxml_variability_summary.csv
 !benchmarking/tyk2_reproducibility/analysis/parameter_variability/offxml_variability_summary.tex
