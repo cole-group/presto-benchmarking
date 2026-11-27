@@ -215,7 +215,9 @@ benchmarking/**/conformer-benchmark/
 !benchmarking/tyk2_cyclopropyl_edges_torsions/analysis/metrics.json
 !benchmarking/folmsbee_conformers/analysis/test/aimnet2/aggregate_stats.csv
 !benchmarking/folmsbee_conformers/analysis/phosphate/aimnet2_no_msm_no_min/aggregate_stats.csv
+!benchmarking/folmsbee_conformers/analysis/phosphate/aimnet2_no_msm_no_min/summary_metrics_vs_qm_with_presto_vs_aimnet2.tex
 !benchmarking/folmsbee_conformers/analysis/sulphonamide/aimnet2_no_msm/aggregate_stats.csv
+!benchmarking/folmsbee_conformers/analysis/sulphonamide/aimnet2_no_msm/summary_metrics_vs_qm_with_presto_vs_aimnet2.tex
 !benchmarking/tyk2_congeneric_series/analysis/retrain_error_summary.csv
 !benchmarking/tyk2_reproducibility/analysis/parameter_variability/offxml_variability_summary.csv
 !benchmarking/tyk2_reproducibility/analysis/parameter_variability/offxml_variability_summary.tex
